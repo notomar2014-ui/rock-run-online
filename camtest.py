@@ -39,6 +39,10 @@ async def main():
         await pg.mouse.click(640,360); await pg.wait_for_timeout(500)
         lc,pl,sh=await pg.evaluate("[lockCalls,!!document.pointerLockElement,shots0]")
         ok(lc>=1,f'clicking the game requests pointer lock (calls {lc}, browser granted: {pl})'); ok(sh==0,'that first click does not fire')
+        await pg.evaluate("document.exitPointerLock()"); await pg.wait_for_timeout(300)
+        bb=await pg.locator('#lockp').bounding_box(); await pg.mouse.click(bb['x']+bb['width']/2,bb['y']+bb['height']/2); await pg.wait_for_timeout(400)
+        ok(await pg.evaluate("!!document.pointerLockElement&&locked"),'a real click ON the HUD hint overlay locks the mouse (document.pointerLockElement set)')
+        pl=await pg.evaluate("!!document.pointerLockElement")
         if not pl: await pg.evaluate("locked=true")  # headless may refuse real lock; test the locked code path directly
         ya=await pg.evaluate(Y); pa=await pg.evaluate('pitch')
         await pg.evaluate("document.dispatchEvent(new MouseEvent('mousemove',{movementX:200,movementY:-50}))")
