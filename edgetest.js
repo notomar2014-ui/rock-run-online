@@ -13,7 +13,7 @@ function client() {
   c.wait = async (t, ms = 3000) => { const e = Date.now() + ms; while (!c.last[t] && Date.now() < e) await sleep(20); return c.last[t]; };
   c.open = new Promise(r => ws.on('open', r)); return c;
 }
-const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) && s.b.every(b => b.every(Number.isFinite));
+const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) && (s.b||[]).every(b => b.every(Number.isFinite));
 (async () => {
   await sleep(900);
   // empty room: start with 0 players must not crash
@@ -42,7 +42,7 @@ const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) &&
   // watch combat for a few seconds
   let hits = 0, hpOk = true, finite = true, bounds = true, t0 = Date.now(), snaps = 0, gaps = 0, lastT = Date.now();
   while (Date.now() - t0 < 6000) { const s = h2.snap; h2.snap = null; if (s) { snaps++; const now = Date.now(); gaps = Math.max(gaps, now - lastT); lastT = now;
-      hits += s.ev.filter(e => e.k === 'hit').length; finite = finite && finiteSnap(s);
+      hits += (s.ev||[]).filter(e => e.k === 'hit').length; finite = finite && finiteSnap(s);
       for (const p of s.p) { if (p[14] < 0 || p[14] > 100) hpOk = false; if (p[1] < 0 || p[1] > 3200 || p[2] < 0 || p[2] > 2000) bounds = false; } } await sleep(10); }
   ok(finite, 'all positions/numbers stay finite after NaN / Infinity / garbage input');
   ok(bounds, 'everyone stays inside the arena');

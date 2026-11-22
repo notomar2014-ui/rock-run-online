@@ -14,7 +14,7 @@ The game keeps every room in the memory of ONE running server, so it needs a hos
 start `node server.js`, `SINGLE_PROCESS=1`, health check `/healthz`; the server listens on `$PORT`.
 - Players: `https://<service>.onrender.com/` · Big screen: `https://<service>.onrender.com/host`
 - Free plan sleeps after ~15 min with nobody connected; the first visit then takes ~1 min to wake. Open `/host` a few minutes before class.
-- Every push to the GitHub repo redeploys automatically.
+- Auto-deploy on push does **not** currently fire on this Render service. After a push, trigger a deploy with the Render connector (`trigger_deploy`) and wait until it is live.
 
 **Why not Vercel?** `https://rock-run-online-notomar2014-1642.vercel.app` runs several copies of the server and cuts
 sockets every 5 minutes, so students can land on a copy without the host's room ("No game with that code", players who
@@ -52,6 +52,16 @@ Everyone has 100 health (bar above heads). Health comes back after 4 s without b
 
 ## Chaos events
 Meteoroid swarm (jump to dodge!), and Vesta impact (chunks spray from the south-pole crater). An "Earth view" then shows a Vesta chunk become a meteor streak, then a tiny meteorite.
+
+
+## Round 5 extras (smoother, more Roblox, more science)
+- Your own astronaut is predicted on your computer and corrected by the server, so movement stays smooth. Other players are interpolated (~100 ms) so they do not jitter.
+- The server runs physics at 40 Hz and sends compact snapshots at 20 Hz (rocks are only resent when they move).
+- Blocky R6-style avatars with a colour and a hat you pick on the join screen (visor, beanie, star, Ceres salt crystal, or Vesta cap).
+- Collect gold stars for points and a “Did you know?” space fact. Power-ups: speed, shield, super jump, and double points.
+- Chaos events include meteor showers, a Vesta chunk, a **low-gravity bonus round**, and a star rush.
+- About 40 quiz questions from the Rocks in Space slides: Ceres and Occator salts, Vesta and Rheasilvia’s 22 km mountain, 2015 TC25, Chicxulub, Chelyabinsk 2013, DART 2022, Ann Hodges 1954, and the Hoba meteorite.
+- Soft background music (toggle with the mute button or **M**), juicier KO effects, and a confetti podium. School-appropriate: no blood.
 
 ## Test
 `node verify_public.js wss://<host> [secs]` checks a public URL (host + 5 players + fresh joins over time + start + movement). `python3 camtest.py [url]` checks real keyboard/mouse input, camera orbit/zoom and answer spread. `python3 test3d.py` (3D) or `python3 test.py` (2D), Playwright: host + 5 players (one on a phone) + 3 bots; saves screenshots to `screenshots/`. `python3 fairtest.py` plays 3 kids who know the answers against 3 Easy bots.

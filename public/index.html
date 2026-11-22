@@ -179,7 +179,7 @@ $('#mute').onclick=()=>{muted=!muted;localStorage.rrMute=muted?'1':'0';$('#mute'
 $('#fs').onclick=()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.().catch(()=>{})};
 
 // ---------------- network ----------------
-let ws=null,cfg=null,myId=0,phase='lobby',roster=new Map(),snap=null,snapAt=0,retry=0,joinedOnce=false,hostInfo=null;
+let ws=null,cfg=null,myId=0,phase='lobby',roster=new Map(),snap=null,snapAt=0,lastRocks=null,retry=0,joinedOnce=false,hostInfo=null;
 const sess=IS_HOST?JSON.parse(sessionStorage.rrHost||'null'):JSON.parse(sessionStorage.rrPlayer||'null');
 function connect(){
  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
@@ -197,7 +197,7 @@ function onMsg(m){
  case 'roster':roster=new Map(m.players.map(p=>[p.id,p]));if(m.phase!==phase&&m.phase!=='end')setPhase(m.phase);renderRoster();break;
  case 'start':tutorialStart();setPhase('play');break;
  case 'lobby':setPhase('lobby');break;
- case 's':snap=m;snapAt=performance.now();for(const e of m.ev)onEvent(e);break;
+ case 's':if(m.r)lastRocks=m.r;else if(typeof lastRocks!=='undefined'&&lastRocks)m.r=lastRocks;if(!m.r)m.r=[];if(!m.b)m.b=[];if(!m.m)m.m=[];if(!m.a)m.a=[];if(!m.f)m.f=[];if(!m.c)m.c=[];if(!m.u)m.u=[];snap=m;snapAt=performance.now();for(const e of (m.ev||[]))onEvent(e);break;
  case 'question':question(m);break;
  case 'grabbed':grabbed(m);break;
  case 'reveal':reveal(m);break;
