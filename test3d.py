@@ -5,10 +5,10 @@ OUT=os.path.join(os.path.dirname(os.path.abspath(__file__)),'screenshots')+'/'
 os.makedirs(OUT,exist_ok=True)
 errors=[]
 import json
-KEY=json.loads(subprocess.run(['node','-e',"const {QUESTIONS}=require('./questions.js');console.log(JSON.stringify(Object.fromEntries(QUESTIONS.map(q=>[q.q,q.a]))))"],capture_output=True,text=True,cwd=os.path.dirname(os.path.abspath(__file__))).stdout)
+KEY=json.loads(subprocess.run(['node','-e',"const {QUESTIONS}=require('./questions.js');console.log(JSON.stringify(Object.fromEntries(QUESTIONS.map(q=>[q.q,q.opts[q.a]]))))"],capture_output=True,text=True,cwd=os.path.dirname(os.path.abspath(__file__))).stdout)
 # scripted kids who KNOW the answer: run to the right (landed) answer meteor
 STEER="""(stop)=>{const me=disp.get(myId);if(!me||!snap)return 1e9;let goal=null,b=1e9;
- if(curQ&&myPick<0&&snap.a.length){const k=window.KEY[curQ.q];for(const a of snap.a){if(a[0]!==k)continue;goal=a}}
+ if(curQ&&myPick<0&&snap.a.length){const k=window.KEY[curQ.q];for(const a of snap.a){const tx=(curQ.opts||[])[a[0]];if(tx===k||a[0]===k){goal=a;break}}}
  if(goal){let dx=goal[1]-me.x,dy=goal[2]-me.y;const l=Math.hypot(dx,dy);dx/=l;dy/=l;for(const o of snap.a){if(o===goal)continue;const ox=me.x-o[1],oy=me.y-o[2],od=Math.hypot(ox,oy);if(od<330){dx+=ox/od*2.2*(330-od)/330*2;dy+=oy/od*2.2*(330-od)/330*2}}const n=Math.hypot(dx,dy)||1;dx=dx/n*l;dy=dy/n*l;yaw=Math.atan2(dy,dx);window.testMove=l>stop?[dx/l,dy/l]:[0,0];return l}
  const a=Math.random()*6.28;window.testMove=[Math.cos(a),Math.sin(a)];return 1e9}"""
 async def main():
@@ -16,7 +16,7 @@ async def main():
     srv=subprocess.Popen(['node','server.js'],env=dict(os.environ,RR_FAST='1',PORT='3311'),stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     time.sleep(1.2); B='http://localhost:3311'
     async with async_playwright() as p:
-        br=await p.chromium.launch(args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
+        br=await p.chromium.launch(executable_path='/usr/bin/google-chrome',args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox']) if os.path.exists('/usr/bin/google-chrome') else await p.chromium.launch(args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
         def watch(pg,name):
             pg.on('console',lambda m: m.type=='error' and errors.append(f'{name}: {m.text}'))
             pg.on('pageerror',lambda e: errors.append(f'{name} PAGEERROR: {e}'))

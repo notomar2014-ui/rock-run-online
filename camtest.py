@@ -13,7 +13,7 @@ async def main():
     def ok(c,m):
         nonlocal fails; print(('PASS ' if c else 'FAIL ')+m); fails+= (not c)
     async with async_playwright() as p:
-        br=await p.chromium.launch(args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
+        br=await p.chromium.launch(executable_path='/usr/bin/google-chrome',args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--no-sandbox']) if os.path.exists('/usr/bin/google-chrome') else await p.chromium.launch(args=['--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
         errs=[]
         host=await (await br.new_context(viewport={'width':1280,'height':720})).new_page(); host.on('pageerror',lambda e: errs.append(str(e)))
         await host.goto(B+'/host'); await host.wait_for_function("document.querySelector('#bigCode').textContent.length===4"); code=await host.text_content('#bigCode')

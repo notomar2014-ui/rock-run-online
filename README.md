@@ -14,7 +14,7 @@ The game keeps every room in the memory of ONE running server, so it needs a hos
 start `node server.js`, `SINGLE_PROCESS=1`, health check `/healthz`; the server listens on `$PORT`.
 - Players: `https://<service>.onrender.com/` · Big screen: `https://<service>.onrender.com/host`
 - Free plan sleeps after ~15 min with nobody connected; the first visit then takes ~1 min to wake. Open `/host` a few minutes before class.
-- Auto-deploy on push does **not** currently fire on this Render service. After a push, trigger a deploy with the Render connector (`trigger_deploy`) and wait until it is live.
+- Every push to the GitHub repo redeploys automatically.
 
 **Why not Vercel?** `https://rock-run-online-notomar2014-1642.vercel.app` runs several copies of the server and cuts
 sockets every 5 minutes, so students can land on a copy without the host's room ("No game with that code", players who
@@ -31,37 +31,26 @@ npm start            # http://localhost:3000
 ## How to play
 | | Laptop | Phone |
 |---|---|---|
-| Look (Roblox camera) | hold **right mouse** + drag to orbit (mouse is never locked) · **← →** arrows turn the camera · **scroll = zoom** | drag on the right half of the screen |
-| Move | W A S D / ↑ ↓ (relative to the camera; your astronaut turns to face where it walks) · Shift sprint · Space jump (press again in the air = double jump, low gravity!) · Q dodge dash | joystick · JUMP · DASH buttons |
-| Tools | 1 / 2 / 3 to pick, left-click to use, aim with the crosshair | tap a tool button (auto-aims) |
+| Look | click the game to lock the mouse, then move it to look (Esc unlocks) · **C** toggles third person · Look slider at the bottom-right | drag on the right half of the screen |
+| Move | W A S D / ↑ ↓ (relative to the camera) · Shift sprint · Space jump (press again in the air = double jump, low gravity!) · Q dodge dash | joystick · JUMP · DASH buttons |
+| Tools | 1 / 2 / 3 or **scroll wheel** to switch · left-click to use · **R** reloads the blaster | tap a tool button (auto-aims) |
 
-- **Answer meteors:** about every 15 s of fighting, a question appears as a banner at the top and 4 glowing lettered meteors (A red, B blue, C yellow, D green, answer written above) crash down onto Ceres. Play keeps going. Run into one to choose it (one pick per question). Right = +300 (+200 more if you're first), wrong = -100 (never below 0). Off-screen arrows and minimap squares show where they are. Then the answer is revealed with a slide fact, and 15 s of fighting follow.
+- **Answer meteors:** about every 15 s of fighting, a question appears as a banner at the top and 4 glowing lettered meteors (A red, B blue, C yellow, D green, answer written above) crash down onto Ceres. Play keeps going. Run into one to choose it (one pick per question). Right = **+200**, wrong = **−50** (never below 0). Off-screen arrows and minimap squares show where they are. Then the answer is revealed with a slide fact (and a short “Did you know?”), and 15 s of fighting follow. Questions and answer letters are shuffled each time, from a pool of 60 accurate Rocks in Space questions, with no repeats until the pool wraps.
 - Bots: pick Easy (default), Medium or Hard in the host lobby. Easy bots mostly go for answers, aim badly and only sometimes fight, so a kid who knows the answer beats them.
 - After respawning you get 3 s of spawn protection (gold bubble); it ends early if you attack. You respawn far from other players.
-- One hit = KO (BONK!) = +100 (+25 per streak, up to +200). Respawn after 3 s with 2.5 s of safety.
-- Camera is third person behind the player (W always walks the way the camera faces). The 4 answer meteors land in 4 different directions around the arena, so turn around to find them. You can see Vesta, the Sun and Jupiter in the sky, and Ceres' bright salt spots.
+- Camera is **first person by default** (you see your hands and the current tool; they animate when you switch, fire, or reload). Press **C** for third person behind your astronaut.
+- Scoring: right answer **+200**, KO someone **+100**, getting KO’d **−50**, meteor hit **−50**, wrong answer **−50** (score never goes below 0). Changes pop up as floating text.
 
 ## The 3 tools (cartoon knockouts, no blood)
-Everyone has 100 health (bar above heads). Health comes back after 4 s without being hit. KO = +50 (+10 per streak) for the attacker, and the player who gets knocked out loses 30 (never below 0); a right answer is +300, so answering matters most.
+Everyone has 100 health (bar above heads and on your HUD). Health comes back after 4 s without being hit.
 | Slot | Tool | What it does |
 |---|---|---|
-| 1 🔫 | Blaster | fast glowing shots (~6.7 per second, very quick bullets), 26 damage (4 hits = KO), fired toward the crosshair. Heat meter: ~10 quick shots overheat it; it cools fast. Sprinting spreads your aim |
-| 2 👊 | Punch | near-instant punches (0.18 s), lunge + wide swing, combo 20/20/32 damage (3rd hit launches people into the air). Punch while in the air = GROUND SLAM shockwave |
-| 3 🛡️ | Shield | hold click to block from the front; reflects blaster shots back at the shooter. Uses energy (blue bar), you move slower |
-| Q 💨 | Dodge dash | quick dash, can't be hit during it, 2.2 s cooldown |
+| 1 🔫 | Blaster | 2 shots = KO (55 damage), 10-round magazine, then a reload. Press **R** to reload early. Ammo is on the HUD. |
+| 2 👊 | Punch | 3-hit combo = KO. Jump and click in the air for a **slam**, a 1-hit KO, then a cooldown shown on the HUD. |
+| 3 🛡️ | Shield | hold to block from the front, uses energy, bounces blaster shots back |
 
 ## Chaos events
 Meteoroid swarm (jump to dodge!), and Vesta impact (chunks spray from the south-pole crater). An "Earth view" then shows a Vesta chunk become a meteor streak, then a tiny meteorite.
-
-
-## Round 5 extras (smoother, more Roblox, more science)
-- Your own astronaut is predicted on your computer and corrected by the server, so movement stays smooth. Other players are interpolated (~100 ms) so they do not jitter.
-- The server runs physics at 40 Hz and sends compact snapshots at 20 Hz (rocks are only resent when they move).
-- Blocky R6-style avatars with a colour and a hat you pick on the join screen (visor, beanie, star, Ceres salt crystal, or Vesta cap).
-- Collect gold stars for points and a “Did you know?” space fact. Power-ups: speed, shield, super jump, and double points.
-- Chaos events include meteor showers, a Vesta chunk, a **low-gravity bonus round**, and a star rush.
-- About 40 quiz questions from the Rocks in Space slides: Ceres and Occator salts, Vesta and Rheasilvia’s 22 km mountain, 2015 TC25, Chicxulub, Chelyabinsk 2013, DART 2022, Ann Hodges 1954, and the Hoba meteorite.
-- Soft background music (toggle with the mute button or **M**), juicier KO effects, and a confetti podium. School-appropriate: no blood.
 
 ## Test
 `node verify_public.js wss://<host> [secs]` checks a public URL (host + 5 players + fresh joins over time + start + movement). `python3 camtest.py [url]` checks real keyboard/mouse input, camera orbit/zoom and answer spread. `python3 test3d.py` (3D) or `python3 test.py` (2D), Playwright: host + 5 players (one on a phone) + 3 bots; saves screenshots to `screenshots/`. `python3 fairtest.py` plays 3 kids who know the answers against 3 Easy bots.

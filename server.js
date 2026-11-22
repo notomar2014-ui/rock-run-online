@@ -3,59 +3,29 @@
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
-const { QUESTIONS, FACTS, DYK, STAR_FACTS } = require('./questions');
-const BUILD = 'r5';
+const { QUESTIONS, FACTS, DYK } = require('./questions');
+const BUILD = 'r6';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
-const TICK = 40, SNAP_EVERY = 2;      // 40 Hz physics, 20 Hz compact snapshots
+const TICK = 40, SNAP_EVERY = 2;      // 40 Hz physics, 20 Hz snapshots (smoother, still light)
 const W = 3200, H = 2000;
 const CERES = { x: 1050, y: 1000, r: 130, gm: 130 * 130 * 5 };
 const VESTA = { x: 2170, y: 980, r: 100, gm: 100 * 100 * 3.5 }; // less mass -> weaker pull, lumpy
 const Q_TIME = 25, REVEAL_TIME = 4, BREAK_TIME = 15, FIRST_BREAK = FAST ? 5 : 10;
-const PTS_RIGHT = 300, PTS_FIRST = 200, PTS_WRONG = 100, PTS_KO = 50, PTS_STAR = 25, PTS_STREAK = 15; // answering matters most; a KO is worth a sixth of a right answer
+const PTS_RIGHT = 200, PTS_WRONG = 50, PTS_KO = 100, PTS_DIE = 50, PTS_METEOR = 50; // Omar: +200 right, +100 KO, -50 wrong / meteor / death (never below 0)
 const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.2, DASH_V = 900, IFRAME = 0.3;
 const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.15, speed: 1750, life: 0.6, r: 8, dmg: 26, heat: 11 },         // fast: ~6.7 shots/s, 4 hits to KO, overheats after ~10 quick shots
-  { name: 'Punch', cd: 0.18, reach: 110, arc: 1.5, dmg: [20, 20, 32], combo: 0.9 },       // near-instant punches, 3-hit combo, last hit launches
+  { name: 'Blaster', cd: 0.16, speed: 1850, life: 0.55, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // 2 hits = KO; 10-round mag then reload
+  { name: 'Punch', cd: 0.18, reach: 110, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7 }, // 3-hit KO; air slam is a 1-hit KO with a long cooldown
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
 const ANSWER_SPOTS = [[520, 420], [1610, 360], [2760, 420], [520, 1580], [1610, 1640], [2760, 1580], [1610, 1000], [330, 1000], [2950, 1000]];
 const SPAWN_SAFE = 3;
-// Obby-style platforms (h = stand height) and jump pads. Kept clear of Ceres/Vesta.
-const PLATS = [
-  { x: 640, y: 620, w: 300, d: 200, h: 90 },
-  { x: 1600, y: 420, w: 320, d: 180, h: 120 },
-  { x: 2560, y: 620, w: 300, d: 200, h: 90 },
-  { x: 640, y: 1480, w: 300, d: 200, h: 90 },
-  { x: 1600, y: 1620, w: 340, d: 200, h: 140 },
-  { x: 2560, y: 1480, w: 300, d: 200, h: 90 },
-  { x: 380, y: 1000, w: 220, d: 180, h: 70 },
-  { x: 2820, y: 1000, w: 220, d: 180, h: 70 },
-];
-const PADS = [
-  { x: 1600, y: 1000, r: 58, boost: 940 },
-  { x: 480, y: 480, r: 50, boost: 860 },
-  { x: 2720, y: 480, r: 50, boost: 860 },
-  { x: 480, y: 1600, r: 50, boost: 860 },
-  { x: 2720, y: 1600, r: 50, boost: 860 },
-];
-const HATS = 5; // 0 visor, 1 beanie, 2 star, 3 salt crystal, 4 Vesta cap
-const worldCfg = () => ({ plats: PLATS, pads: PADS, build: BUILD });
-function floorAt(x, y, h, vh) {
-  let fl = 0;
-  for (const pl of PLATS) {
-    if (Math.abs(x - pl.x) <= pl.w / 2 && Math.abs(y - pl.y) <= pl.d / 2) {
-      if (h >= pl.h - 28 || (vh <= 40 && h >= pl.h - 40 && h <= pl.h + 55)) fl = Math.max(fl, pl.h);
-    }
-  }
-  return fl;
-}
-
 // bot difficulty: think = reaction time (s), aim = aim error (rad), fire = chance to shoot per think, fight = chance to be in a fighting mood,
 // range = how far they will chase, selfDefense = always fight back this close, humanAvoid = >1 means they pick on bots before kids,
 // smart = chance to go for the RIGHT answer, pick = delay before heading to an answer (s)
@@ -90,10 +60,8 @@ class Room {
     this.rocks = []; this.bullets = []; this.meteors = []; this.falls = []; this.events = []; this.time = 0;
     this.q = { stage: 'break', until: FIRST_BREAK, qid: -1, n: 0, ans: [], firstRight: false, picks: new Map() };
     this.nextChaos = FAST ? 3 : 30; this.qOrder = shuffle([...QUESTIONS.keys()]); this.qi = 0;
-    this.stars = []; this.pups = []; this.nextStar = 1.5; this.nextPup = 8; this.gMul = 1; this.gUntil = 0;
-    this.rockDirty = true; this.rockSnap = null; this.starDirty = true; this.pupDirty = true; this.starSnap = null; this.pupSnap = null;
+    this.rockDirty = true; this.rockSnap = null;
     for (let i = 0; i < 24; i++) this.spawnRock();
-    for (let i = 0; i < 12; i++) this.spawnStar();
   }
   freeSpot(margin = 160) {
     for (let k = 0; k < 40; k++) {
@@ -109,30 +77,15 @@ class Room {
     this.rocks.push({ id: id(), x: p.x, y: p.y, r, vx: vx ?? 0, vy: vy ?? 0, rot: rnd(0, 6.28), spin: rnd(-1, 1), hp: Math.ceil(r / 22) });
     this.rockDirty = true;
   }
-  spawnStar() {
-    // prefer a mix of ground and platform stars
-    let x, y, h = 28;
-    if (Math.random() < 0.45) { const pl = PLATS[Math.random() * PLATS.length | 0]; x = pl.x + rnd(-pl.w * 0.35, pl.w * 0.35); y = pl.y + rnd(-pl.d * 0.35, pl.d * 0.35); h = pl.h + 36; }
-    else { const s = this.freeSpot(70); x = s.x; y = s.y; }
-    const fact = STAR_FACTS && STAR_FACTS.length ? STAR_FACTS[this.stars.length % STAR_FACTS.length] : '';
-    this.stars.push({ id: id(), x, y, h, fact }); this.starDirty = true;
-  }
-  spawnPup() {
-    const s = this.freeSpot(80), kind = 1 + (Math.random() * 4 | 0); // 1 speed, 2 shield, 3 jump, 4 x2
-    this.pups.push({ id: id(), x: s.x, y: s.y, k: kind, life: 16 }); this.pupDirty = true;
-  }
   ev(e) { this.events.push(e); }
   send(ws, msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
   toAll(msg) { const s = JSON.stringify(msg); for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(s); for (const h of this.hosts) if (h.readyState === 1) h.send(s); }
   fact(p, text) { if (!p.bot) this.send(p.ws, { t: 'fact', text }); }
-  addPlayer(name, color, ws, bot = false, hat = 0) {
-    hat = clamp(hat | 0, 0, HATS - 1);
-    if (bot) hat = Math.random() * HATS | 0;
-    const p = { id: id(), token: crypto.randomBytes(8).toString('hex'), name, color, hat, ws, bot, x: 0, y: 0, vx: 0, vy: 0, a: 0,
+  addPlayer(name, color, ws, bot = false) {
+    const p = { id: id(), token: crypto.randomBytes(8).toString('hex'), name, color, ws, bot, x: 0, y: 0, vx: 0, vy: 0, a: 0,
       alive: false, respawnAt: 0, inv: 0, block: 0, cds: [0, 0, 0], dashCd: 0, h: 0, vh: 0, jumps: 2, jPrev: 0, tool: 0, swing: 0, score: 0, kos: 0, deaths: 0,
-      streak: 0, correct: 0, qStreak: 0, input: { mx: 0, my: 0, a: 0, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 },
-      hp: HP, heat: 0, over: 0, en: 100, combo: 0, comboT: -9, kbx: 0, kby: 0, iframe: 0, lastHit: -9, slam: 0, qPrev: 0, seenWell: {}, connected: true, botT: 0, botPickAt: 0,
-      inSeq: 0, buff: 0, buffUntil: 0, emote: 0, emoteT: 0, padCd: 0 };
+      streak: 0, correct: 0, input: { mx: 0, my: 0, a: 0, f: 0, tool: 0, dash: 0, sprint: 0, q: 0, rl: 0 },
+      hp: HP, heat: 0, over: 0, en: 100, ammo: 10, reloading: 0, slamCd: 0, inSeq: 0, combo: 0, comboT: -9, kbx: 0, kby: 0, iframe: 0, lastHit: -9, slam: 0, qPrev: 0, rlPrev: 0, seenWell: {}, connected: true, botT: 0, botPickAt: 0 };
     this.players.set(p.id, p);
     if (this.phase === 'play') this.respawn(p);
     this.roster(); return p;
@@ -142,15 +95,15 @@ class Room {
     for (let k = 0; k < 12; k++) { const s = this.freeSpot(); let d = 1e9; for (const o of this.players.values()) if (o !== p && o.alive) d = Math.min(d, dist(o, s)); if (d > bd) { bd = d; best = s; } }
     return best;
   }
-  respawn(p) { const s = this.safeSpot(p); Object.assign(p, { x: s.x, y: s.y, vx: 0, vy: 0, h: 0, vh: 0, alive: true, inv: SPAWN_SAFE, block: 0, hp: HP, heat: 0, over: 0, en: 100, kbx: 0, kby: 0, slam: 0, iframe: 0, dashCd: 0, padCd: 0 }); }
+  respawn(p) { const s = this.safeSpot(p); Object.assign(p, { x: s.x, y: s.y, vx: 0, vy: 0, h: 0, vh: 0, alive: true, inv: SPAWN_SAFE, block: 0, hp: HP, heat: 0, over: 0, en: 100, ammo: 10, reloading: 0, kbx: 0, kby: 0, slam: 0, iframe: 0, dashCd: 0 }); }
   roster() {
-    const list = [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, hat: p.hat || 0, score: p.score, kos: p.kos, correct: p.correct, bot: p.bot, on: p.connected || p.bot }));
+    const list = [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, score: p.score, kos: p.kos, deaths: p.deaths, correct: p.correct, bot: p.bot, on: p.connected || p.bot }));
     this.toAll({ t: 'roster', players: list, phase: this.phase, duration: this.duration });
   }
   start(duration) {
     this.duration = clamp(duration | 0 || 360, FAST ? 20 : 120, 900); this.reset(); this.phase = 'play';
-    for (const p of this.players.values()) { Object.assign(p, { score: 0, kos: 0, deaths: 0, streak: 0, qStreak: 0, correct: 0, cds: [0, 0, 0], dashCd: 0, buff: 0, buffUntil: 0, emote: 0 }); this.respawn(p); }
-    this.toAll({ t: 'start', duration: this.duration, ...worldCfg() }); this.roster();
+    for (const p of this.players.values()) { Object.assign(p, { score: 0, kos: 0, deaths: 0, streak: 0, correct: 0, cds: [0, 0, 0], dashCd: 0, ammo: 10, reloading: 0, slamCd: 0 }); this.respawn(p); }
+    this.toAll({ t: 'start', duration: this.duration, build: BUILD }); this.roster();
   }
   end() {
     this.phase = 'end';
@@ -165,32 +118,29 @@ class Room {
     // Spread the answers in 4 different directions around the arena (90° apart, random turn), at mixed distances,
     // so you have to turn the camera to find them instead of seeing all four at once.
     const turn = Math.random() * Math.PI * 2, spots = shuffle([0, 1, 2, 3]).map(k => { const ang = turn + k * Math.PI / 2 + rnd(-0.25, 0.25), f = rnd(0.62, 0.95); return [clamp(W / 2 + Math.cos(ang) * (W / 2 - 260) * f, 260, W - 260), clamp(H / 2 + Math.sin(ang) * (H / 2 - 220) * f, 220, H - 220)]; });
+    const order = shuffle([0, 1, 2, 3]), opts = order.map(i => Q.opts[i]), correct = order.indexOf(Q.a);
     const q = this.q; q.stage = 'question'; q.until = this.time + Q_TIME; q.qid = qid; q.n++; q.firstRight = false; q.picks = new Map();
-    q.ans = Q.opts.map((text, i) => ({ i, text, x: spots[i][0] + rnd(-60, 60), y: spots[i][1] + rnd(-40, 40), vx: 0, vy: 0, r: 90, landAt: this.time + 1.8 + i * 0.25, landed: false }));
+    q.opts = opts; q.correct = correct;
+    q.ans = opts.map((text, i) => ({ i, text, x: spots[i][0] + rnd(-60, 60), y: spots[i][1] + rnd(-40, 40), vx: 0, vy: 0, r: 90, landAt: this.time + 1.8 + i * 0.25, landed: false }));
     for (const p of this.players.values()) p.botPickAt = this.time + rnd(...(BOT_LEVELS[this.botLevel] || BOT_LEVELS.easy).pick);
-    this.toAll({ t: 'question', n: q.n, q: Q.q, opts: Q.opts, time: Q_TIME });
+    this.toAll({ t: 'question', n: q.n, q: Q.q, opts, time: Q_TIME });
   }
   grab(p, a) {
     const q = this.q, Q = QUESTIONS[q.qid]; if (q.picks.has(p.id)) return;
-    const ok = a.i === Q.a; let pts;
-    if (ok) { p.qStreak = (p.qStreak || 0) + 1; pts = PTS_RIGHT + (q.firstRight ? 0 : PTS_FIRST) + (p.qStreak >= 2 ? PTS_STREAK * Math.min(p.qStreak - 1, 4) : 0); q.firstRight = true; p.correct++; }
-    else { pts = -Math.min(PTS_WRONG, p.score); p.qStreak = 0; }
+    const ok = a.i === (q.correct ?? Q.a); let pts;
+    if (ok) { pts = PTS_RIGHT; q.firstRight = true; p.correct++; }
+    else pts = -Math.min(PTS_WRONG, p.score);
     p.score += pts; q.picks.set(p.id, a.i);
-    this.send(p.ws, { t: 'grabbed', i: a.i, ok, pts, first: ok && pts > PTS_RIGHT });
-    this.ev({ k: 'grab', id: p.id, x: a.x, y: a.y, i: a.i });
+    this.send(p.ws, { t: 'grabbed', i: a.i, ok, pts, first: ok && !q.firstRight });
+    this.ev({ k: 'grab', id: p.id, x: a.x, y: a.y, i: a.i, pts, ok: ok ? 1 : 0 });
     this.dirtyRoster = true;
     const active = [...this.players.values()].filter(x => x.connected || x.bot);
     if (active.every(x => q.picks.has(x.id))) q.until = Math.min(q.until, this.time + 1);
   }
   revealQuestion() {
     const q = this.q, Q = QUESTIONS[q.qid]; q.stage = 'reveal'; q.until = this.time + REVEAL_TIME;
-    const right = [...q.picks.values()].filter(i => i === Q.a).length;
-    this.toAll({ t: 'reveal', a: Q.a, fact: Q.fact, right, picked: q.picks.size });
-  }
-  award(p, pts) {
-    if (!pts) return 0;
-    if (p.buff === 4 && this.time < p.buffUntil) pts *= 2;
-    p.score += pts; this.dirtyRoster = true; return pts;
+    const ans = q.correct ?? Q.a; const right = [...q.picks.values()].filter(i => i === ans).length;
+    this.toAll({ t: 'reveal', a: ans, fact: Q.fact, right, picked: q.picks.size });
   }
 
   // ---------- combat ----------
@@ -198,10 +148,11 @@ class Room {
     if (!v.alive || v.inv > 0 || (!force && v.iframe > 0)) return false;
     if (!force && v.block > 0) { this.ev({ k: 'blocked', x: v.x, y: v.y }); return false; }
     v.alive = false; v.hp = 0; v.slam = 0; v.respawnAt = this.time + 3; v.deaths++; v.streak = 0;
-    const lost = Math.min(30, Math.max(0, v.score)); v.score -= lost;
+    const meteor = /meteor|vesta chunk|squashed/i.test(String(how || ''));
+    const lost = Math.min(meteor ? PTS_METEOR : PTS_DIE, Math.max(0, v.score)); v.score -= lost;
     let pts = 0;
-    if (killer && killer !== v) { killer.streak++; killer.kos++; pts = this.award(killer, PTS_KO + 10 * Math.min(killer.streak - 1, 4)); }
-    this.ev({ k: 'ko', v: v.id, by: killer && killer !== v ? killer.id : 0, how, x: v.x, y: v.y, c: v.color, pts, lost, streak: killer ? killer.streak : 0 });
+    if (killer && killer !== v) { killer.streak++; killer.kos++; pts = PTS_KO; killer.score += pts; }
+    this.ev({ k: 'ko', v: v.id, by: killer && killer !== v ? killer.id : 0, how, x: v.x, y: v.y, c: v.color, pts, lost, why: meteor ? 'meteor' : 'down', streak: killer ? killer.streak : 0 });
     this.dirtyRoster = true; return true;
   }
   front(v, x, y) { return Math.abs(angDiff(Math.atan2(y - v.y, x - v.x), v.a)) < 1.3; }
@@ -212,19 +163,28 @@ class Room {
     if (v.hp <= 0) this.ko(v, by, how, true);
     return true;
   }
+  beginReload(p) {
+    if (p.reloading > 0 || p.ammo >= TOOLS[0].mag) return;
+    p.reloading = TOOLS[0].reload; p.over = 1; this.ev({ k: 'reload', id: p.id, x: p.x, y: p.y });
+  }
   use(p) {
     const t = p.tool, T = TOOLS[t]; if (t === 2 || p.cds[t] > 0) return;
-    if (t === 0 && p.over) return;
-    p.cds[t] = T.cd; p.inv = 0; // attacking ends spawn protection
     const dx = Math.cos(p.a), dy = Math.sin(p.a);
     if (t === 0) {
-      p.heat += T.heat; if (p.heat >= 100) { p.heat = 100; p.over = 1; this.ev({ k: 'overheat', id: p.id }); }
+      if (p.reloading > 0) return;
+      if (p.ammo <= 0) { this.beginReload(p); return; }
+      p.cds[0] = T.cd; p.inv = 0; p.ammo--;
       const a = p.a + (p.input.sprint ? rnd(-0.14, 0.14) : rnd(-0.025, 0.025)), ax = Math.cos(a), ay = Math.sin(a);
       this.bullets.push({ x: p.x + ax * 26, y: p.y + ay * 26, h: p.h + 55, vx: ax * T.speed, vy: ay * T.speed, owner: p.id, life: T.life, r: T.r, dmg: T.dmg });
-      this.ev({ k: 'shot', x: p.x, y: p.y, id: p.id });
+      this.ev({ k: 'shot', x: p.x, y: p.y, id: p.id, ammo: p.ammo });
+      if (p.ammo <= 0) this.beginReload(p);
     } else if (t === 1) {
-      if (p.h > 70 && !p.slam) { p.slam = 1; p.vh = -1100; p.cds[1] = 0.8; this.ev({ k: 'slamgo', id: p.id }); return; } // ground slam from the air
-      p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
+      p.inv = 0;
+      if (p.h > 70 && !p.slam) {
+        if ((p.slamCd || 0) > 0) return; // slam still cooling down
+        p.slam = 1; p.vh = -1100; p.cds[1] = 0.8; p.slamCd = T.slamCd; this.ev({ k: 'slamgo', id: p.id }); return;
+      }
+      p.cds[1] = T.cd; p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
       const c = p.combo; p.swing = 0.16; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
       for (const o of this.players.values()) {
         if (o === p || !o.alive || dist(o, p) > T.reach + 25 || Math.abs(o.h - p.h) > 110 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
@@ -249,7 +209,7 @@ class Room {
     let goal = null;
     const q = this.q;
     if (q.stage === 'question' && !q.picks.has(p.id) && this.time > p.botPickAt) {
-      if (p.botGoal === undefined || p.botGoalQ !== q.n) { p.botGoalQ = q.n; p.botGoal = Math.random() < L.smart ? QUESTIONS[q.qid].a : Math.random() * q.ans.length | 0; }
+      if (p.botGoal === undefined || p.botGoalQ !== q.n) { p.botGoalQ = q.n; p.botGoal = Math.random() < L.smart ? (q.correct ?? QUESTIONS[q.qid].a) : Math.random() * q.ans.length | 0; }
       goal = q.ans[p.botGoal];
     }
     let mx = 0, my = 0;
@@ -272,19 +232,12 @@ class Room {
 
   // ---------- chaos ----------
   chaos() {
-    const roll = Math.random();
-    if (roll < 0.34) {
+    if (Math.random() < 0.6) {
       this.swarm = { left: 22, t: 0 };
       this.toAll({ t: 'chaos', kind: 'swarm', text: '☄️ METEOR SHOWER! Watch for red circles!', fact: pick(FACTS.meteoroid) });
-    } else if (roll < 0.58) {
+    } else {
       const s = this.freeSpot(); this.falls.push({ x: s.x, y: s.y, t: 3, r: 200, big: 1 });
       this.toAll({ t: 'chaos', kind: 'vesta', text: '💥 A BIG VESTA CHUNK IS FALLING! Run!', fact: pick(FACTS.vesta) });
-    } else if (roll < 0.82) {
-      this.gMul = 0.42; this.gUntil = this.time + 14;
-      this.toAll({ t: 'chaos', kind: 'lowg', text: '🌙 LOW GRAVITY BONUS! Super floaty jumps on Ceres!', fact: pick(FACTS.ceres) });
-    } else {
-      for (let i = 0; i < 10 && this.stars.length < 28; i++) this.spawnStar();
-      this.toAll({ t: 'chaos', kind: 'stars', text: '⭐ STAR RUSH! Collect the gold stars for points and facts!', fact: pick(FACTS.asteroid || FACTS.meteoroid) });
     }
   }
   land(f) {
@@ -297,12 +250,11 @@ class Room {
   tick(dt) {
     if (this.phase !== 'play') return;
     this.tickN++; this.time += dt;
-    if (this.gUntil && this.time >= this.gUntil) { this.gMul = 1; this.gUntil = 0; }
     if (this.time >= this.duration) return this.end();
     const q = this.q;
     if (q.stage === 'break' && this.time >= q.until && this.duration - this.time > 12) this.startQuestion();
     else if (q.stage === 'question' && this.time >= q.until) this.revealQuestion();
-    else if (q.stage === 'reveal' && this.time >= q.until) { q.stage = 'break'; q.until = this.time + BREAK_TIME; q.ans = []; this.toAll({ t: 'qend', next: BREAK_TIME, dyk: pick(DYK) }); }
+    else if (q.stage === 'reveal' && this.time >= q.until) { q.stage = 'break'; q.until = this.time + BREAK_TIME; q.ans = []; this.toAll({ t: 'qend', next: BREAK_TIME, dyk: (DYK && DYK.length) ? pick(DYK) : undefined }); }
     if (this.time >= this.nextChaos && q.stage === 'break' && q.until - this.time > 7) { this.chaos(); this.nextChaos = this.time + rnd(28, 40); }
     if (this.swarm) { const w = this.swarm; w.t += dt; while (w.left > 0 && w.t > 0.28) { w.t -= 0.28; w.left--; this.falls.push({ x: rnd(100, W - 100), y: rnd(100, H - 100), t: 1.6, r: 70 }); } if (w.left <= 0) this.swarm = null; }
     for (let i = this.falls.length - 1; i >= 0; i--) { const f = this.falls[i]; f.t -= dt; if (f.t <= 0) { this.falls.splice(i, 1); this.land(f); } }
@@ -315,7 +267,12 @@ class Room {
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
       if (!p.bot && Date.now() - (p.inAt || 0) > 600) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 0.6 s (tab hidden, lost keyup, dropped link) = stand still
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
-      p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt); // blaster cools ~2x faster if (p.over && p.heat <= 0) p.over = 0;
+      p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt);
+      p.slamCd = Math.max(0, (p.slamCd || 0) - dt);
+      if (p.reloading > 0) { p.reloading = Math.max(0, p.reloading - dt); if (p.reloading <= 0) { p.ammo = TOOLS[0].mag; p.over = 0; this.ev({ k: 'reloaded', id: p.id }); } }
+      else { p.over = 0; }
+      if (p.input.rl && !p.rlPrev) this.beginReload(p);
+      p.rlPrev = p.input.rl ? 1 : 0;
       if (this.time - p.lastHit > REGEN_DELAY) p.hp = Math.min(HP, p.hp + REGEN * dt);
       for (let i = 0; i < 3; i++) p.cds[i] = Math.max(0, p.cds[i] - dt);
       const inp = p.input; p.a = Number.isFinite(+inp.a) ? +inp.a : 0; p.tool = clamp(inp.tool | 0, 0, 2);
@@ -324,43 +281,32 @@ class Room {
       else { p.block = 0; p.en = Math.min(100, p.en + TOOLS[2].regen * dt); }
       let mx = +inp.mx || 0, my = +inp.my || 0; const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
       // snappy Roblox-style movement: velocity eases to target quickly (little drift)
-      const fast = p.buff === 1 && this.time < p.buffUntil;
-      const sp = (inp.sprint && !shielding ? SPRINT : SPEED) * (shielding ? 0.5 : 1) * (fast ? 1.45 : 1), k = Math.min(1, dt * 11);
+      const sp = (inp.sprint && !shielding ? SPRINT : SPEED) * (shielding ? 0.5 : 1), k = Math.min(1, dt * 11);
       if (inp.q && !p.qPrev && p.dashCd <= 0) { // dodge dash with i-frames
         let ddx = mx, ddy = my; if (!Math.hypot(ddx, ddy)) { ddx = Math.cos(p.a); ddy = Math.sin(p.a); } const dl = Math.hypot(ddx, ddy) || 1;
         p.kbx += ddx / dl * DASH_V; p.kby += ddy / dl * DASH_V; p.iframe = IFRAME; p.dashCd = DASH_CD; this.ev({ k: 'dash', id: p.id, x: p.x, y: p.y });
       }
       p.qPrev = inp.q ? 1 : 0;
       p.vx += (mx * sp - p.vx) * k; p.vy += (my * sp - p.vy) * k;
-      const fl = floorAt(p.x, p.y, p.h, p.vh);
-      let grounded = p.h <= fl + 0.6;
-      if (grounded && p.vh <= 0) { p.h = fl; p.vh = 0; p.jumps = 2; }
-      const jv = JUMP_V * (p.buff === 3 && this.time < p.buffUntil ? 1.35 : 1);
-      if (inp.dash && !p.jPrev && p.jumps > 0) { p.vh = p.jumps === 2 ? jv : jv * 0.85; p.jumps--; p.h = Math.max(p.h, fl + 1); this.ev({ k: 'jump', id: p.id, x: p.x, y: p.y, d: p.jumps === 0 ? 1 : 0 }); grounded = false; }
+      const grounded = p.h <= 0;
+      if (grounded) p.jumps = 2;
+      if (inp.dash && !p.jPrev && p.jumps > 0) { p.vh = p.jumps === 2 ? JUMP_V : JUMP_V * 0.85; p.jumps--; this.ev({ k: 'jump', id: p.id, x: p.x, y: p.y, d: p.jumps === 0 ? 1 : 0 }); }
       p.jPrev = inp.dash ? 1 : 0;
-      const g = GRAV * (this.gMul || 1);
-      if (!grounded || p.vh > 0) { p.vh -= g * dt; p.h += p.vh * dt; const fl2 = floorAt(p.x, p.y, p.h, p.vh); if (p.h <= fl2 && p.vh <= 0) { p.h = fl2; p.vh = 0; } if (p.h < 0) { p.h = 0; p.vh = 0; } }
-      p.padCd = Math.max(0, (p.padCd || 0) - dt);
-      if (!p.padCd) for (const pad of PADS) if (Math.hypot(p.x - pad.x, p.y - pad.y) < pad.r && p.h < 55) { p.vh = Math.max(p.vh, pad.boost); p.h = Math.max(p.h, 2); p.padCd = 0.7; p.jumps = 1; this.ev({ k: 'pad', id: p.id, x: pad.x, y: pad.y }); break; }
+      if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h = Math.max(0, p.h + p.vh * dt); if (p.h <= 0) p.vh = 0; }
       if (p.slam && p.h <= 0) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
-        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 150) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, 35, 'slam', nx * 600, ny * 600, 380); } } }
+        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 160) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
       if (inp.f) this.use(p);
       if (!p.seenWell.c && this.time > 4) { p.seenWell.c = 1; this.fact(p, pick(FACTS.ceres)); }
-      if (p.buff && this.time >= p.buffUntil) p.buff = 0;
-      if (p.emote && this.time >= p.emoteT) p.emote = 0;
-      if (p.buff === 2 && this.time < p.buffUntil) p.inv = Math.max(p.inv, 0.2);
       p.x = clamp(p.x + (p.vx + p.kbx) * dt, 20, W - 20); p.y = clamp(p.y + (p.vy + p.kby) * dt, 20, H - 20);
       const kd = Math.pow(0.012, dt); p.kbx *= kd; p.kby *= kd;
       if (!Number.isFinite(p.x + p.y + p.h + p.vh + p.vx + p.vy + p.kbx + p.kby)) { this.respawn(p); continue; } // never let a NaN escape
       for (const r of this.rocks) { const d = dist(p, r), m = r.r + 18; if (d < m && d > 0 && p.h < r.r * 1.2) { const nx = (p.x - r.x) / d, ny = (p.y - r.y) / d; p.x = r.x + nx * m; p.y = r.y + ny * m; r.vx -= nx * 20; r.vy -= ny * 20; } }
       if (q.stage === 'question' && !q.picks.has(p.id)) for (const a of q.ans) if (a.landed && Math.hypot(p.x - a.x, p.y - a.y) < a.r + 18) { this.grab(p, a); break; }
-      for (let si = this.stars.length - 1; si >= 0; si--) { const c = this.stars[si]; if (Math.hypot(p.x - c.x, p.y - c.y) < 42 && Math.abs(p.h - c.h) < 70) { const pts = this.award(p, PTS_STAR); this.ev({ k: 'star', id: p.id, x: c.x, y: c.y, h: c.h, pts }); if (c.fact && !p.bot) this.send(p.ws, { t: 'fact', text: c.fact }); this.stars.splice(si, 1); this.starDirty = true; } }
-      for (let ui = this.pups.length - 1; ui >= 0; ui--) { const u = this.pups[ui]; if (Math.hypot(p.x - u.x, p.y - u.y) < 46 && p.h < 90) { p.buff = u.k; p.buffUntil = this.time + 8; this.ev({ k: 'pup', id: p.id, x: u.x, y: u.y, k: u.k }); if (!p.bot) this.send(p.ws, { t: 'fact', text: { 1: '⚡ SPEED STAR! You run faster for 8 seconds.', 2: '🛡️ SHIELD BUBBLE! You are safe for 8 seconds.', 3: '🌙 SUPER JUMP! Higher jumps for 8 seconds.', 4: '💎 DOUBLE POINTS on stars and KOs for 8 seconds!' }[u.k] }); this.pups.splice(ui, 1); this.pupDirty = true; } }
     }
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; let dead = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > W || b.y > H;
       if (!dead) for (const r of this.rocks) if (dist(b, r) < r.r + b.r && b.h < r.r * 1.6) { r.hp--; r.vx += b.vx * 0.03; r.vy += b.vy * 0.03; this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
-      // generous hitbox (+ a little extra) so hits feel fair at 20 Hz snapshots with interpolation
+      // generous hitbox (+ a little extra) so hits feel fair at 15 Hz snapshots with interpolation
       if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 32 + b.r && Math.abs(p.h + 50 - b.h) < 85) {
         if (p.block > 0 && this.front(p, p.x - b.vx, p.y - b.vy)) { // deflect it back toward the shooter
           const o = this.players.get(b.owner), sp = Math.hypot(b.vx, b.vy) * 1.1; let a = Math.atan2(-b.vy, -b.vx); if (o && o.alive) a = Math.atan2(o.y - b.y, o.x - b.x);
@@ -381,43 +327,31 @@ class Room {
     for (let i = this.rocks.length - 1; i >= 0; i--) {
       const r = this.rocks[i]; r.x += r.vx * dt; r.y += r.vy * dt; r.rot += r.spin * dt; r.vx *= Math.pow(0.05, dt); r.vy *= Math.pow(0.05, dt);
       if (r.x < r.r || r.x > W - r.r) r.vx = (r.x < r.r ? 1 : -1) * Math.abs(r.vx); if (r.y < r.r || r.y > H - r.r) r.vy = (r.y < r.r ? 1 : -1) * Math.abs(r.vy);
-      if (r.hp <= 0) { this.rocks.splice(i, 1); this.ev({ k: 'rock', x: r.x, y: r.y, r: r.r }); if (r.r > 34) for (let j = 0; j < 2; j++) this.spawnRock(r.x + rnd(-10, 10), r.y + rnd(-10, 10), r.r * 0.55, rnd(-110, 110), rnd(-110, 110)); }
+      if (r.hp <= 0) { this.rocks.splice(i, 1); this.rockDirty = true; this.ev({ k: 'rock', x: r.x, y: r.y, r: r.r }); if (r.r > 34) for (let j = 0; j < 2; j++) this.spawnRock(r.x + rnd(-10, 10), r.y + rnd(-10, 10), r.r * 0.55, rnd(-110, 110), rnd(-110, 110)); }
     }
     while (this.rocks.length < 20) this.spawnRock();
-    if (this.time >= this.nextStar) { if (this.stars.length < 12) this.spawnStar(); this.nextStar = this.time + rnd(2.2, 4.5); }
-    if (this.time >= this.nextPup) { if (this.pups.length < 3) this.spawnPup(); this.nextPup = this.time + rnd(9, 16); }
-    for (let i = this.pups.length - 1; i >= 0; i--) { this.pups[i].life -= dt; if (this.pups[i].life <= 0) { this.pups.splice(i, 1); this.pupDirty = true; } }
     if (this.dirtyRoster || this.tickN % TICK === 0) { this.dirtyRoster = false; this.roster(); }
     this.snapshot();
   }
   snapshot() {
     if (this.tickN % SNAP_EVERY) return;
     const R = Math.round, q = this.q, r1 = v => R(v * 10) / 10;
+    const ev = this.events; this.events = [];
     const movingRock = this.rocks.some(r => Math.abs(r.vx) + Math.abs(r.vy) > 2);
     const sendRocks = this.rockDirty || movingRock || !this.rockSnap || this.tickN % (SNAP_EVERY * 10) === 0;
-    if (sendRocks) {
-      this.rockSnap = this.rocks.map(r => [r.id, R(r.x), R(r.y), R(r.r), r1(r.rot)]);
-      this.rockDirty = false;
-    }
-    const ev = this.events; this.events = [];
+    if (sendRocks) { this.rockSnap = this.rocks.map(r => [r.id, R(r.x), R(r.y), R(r.r), r1(r.rot)]); this.rockDirty = false; }
     const s = { t: 's', n: this.tickN, left: Math.max(0, R(this.duration - this.time)), qs: q.stage, ql: Math.max(0, R(q.until - this.time)), qn: q.n,
-      g: R((this.gMul || 1) * 100),
       p: [...this.players.values()].map(p => [p.id, R(p.x), R(p.y), R(p.a * 100) / 100, (p.alive ? 1 : 0) | (p.block > 0 ? 2 : 0) | (p.inv > 0 ? 4 : 0) | (q.picks.has(p.id) ? 16 : 0) | (p.swing > 0 ? 32 : 0),
         p.tool, R(p.vx), R(p.vy), R(p.respawnAt - this.time), r1(p.cds[0]), r1(p.cds[1]), r1(p.cds[2]), p.jumps, R(p.h),
-        R(p.hp), R(p.heat), R(p.en), r1(p.dashCd), (p.over ? 1 : 0) | (p.iframe > 0 ? 2 : 0) | (p.slam ? 4 : 0), p.combo,
-        p.emote || 0, p.buff && this.time < p.buffUntil ? p.buff : 0]),
+        R(p.hp), p.ammo | 0, R(p.en), r1(p.dashCd), (p.reloading > 0 ? 1 : 0) | (p.iframe > 0 ? 2 : 0) | (p.slam ? 4 : 0), p.combo,
+        r1(p.reloading || 0), r1(p.slamCd || 0)]),
       ev };
     if (sendRocks) s.r = this.rockSnap;
     if (this.bullets.length) s.b = this.bullets.map(b => [R(b.x), R(b.y), R(b.vx), R(b.vy), R(b.h)]);
     if (this.meteors.length) s.m = this.meteors.map(m => [R(m.x), R(m.y), R(m.vx), R(m.vy), R(m.r)]);
     if (q.ans.length) s.a = q.ans.map(a => [a.i, R(a.x), R(a.y), a.r, r1(Math.max(0, a.landAt - this.time))]);
     if (this.falls.length) s.f = this.falls.map(f => [R(f.x), R(f.y), r1(f.t), f.r, f.big || 0]);
-    const sendStars = this.starDirty || !this.starSnap || this.tickN % (SNAP_EVERY * 10) === 0;
-    if (sendStars) { this.starSnap = this.stars.map(c => [c.id, R(c.x), R(c.y), R(c.h)]); this.starDirty = false; s.c = this.starSnap; }
-    const sendPups = this.pupDirty || !this.pupSnap || this.tickN % (SNAP_EVERY * 10) === 0;
-    if (sendPups) { this.pupSnap = this.pups.map(u => [u.id, R(u.x), R(u.y), u.k]); this.pupDirty = false; s.u = this.pupSnap; }
     if (!ev.length) delete s.ev;
-    // Per-recipient ack + precise state so the owner can predict and reconcile without rubber-banding.
     for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) {
       s.ack = p.inSeq || 0;
       s.pr = [R(p.x), R(p.y), R(p.h), R(p.vx), R(p.vy), R(p.vh), p.jumps, R(p.kbx), R(p.kby)];
@@ -437,8 +371,8 @@ const clean = s => String(s || '').replace(/<[^>]*>/g, '').replace(/[<>&"'`]/g, 
 const INDEX = path.join(__dirname, 'public', 'index.html'), INDEX3D = path.join(__dirname, 'public', '3d.html');
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/favicon.ico' || url.pathname === '/apple-touch-icon.png') { res.writeHead(204); return res.end(); }
   if (url.pathname === '/healthz') { res.writeHead(200, { 'content-type': 'text/plain', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); return res.end(process.env.SPACE_ID || process.env.SINGLE_PROCESS ? 'ok single-process' : 'ok'); } // SPACE_ID is set by Hugging Face Spaces
+  if (url.pathname === '/favicon.ico' || url.pathname === '/apple-touch-icon.png') { res.writeHead(204); return res.end(); }
   if (url.pathname === '/qr.svg') {
     try { const svg = await QRCode.toString(String(url.searchParams.get('u') || '').slice(0, 300), { type: 'svg', margin: 1, color: { dark: '#0b0820', light: '#ffffff' } });
       res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' }); return res.end(svg); } catch { res.writeHead(400); return res.end(); }
@@ -473,7 +407,7 @@ wss.on('connection', (ws) => {
       if (m.code && rooms.has(m.code) && rooms.get(m.code).key === m.key) room = rooms.get(m.code);
       else { room = new Room(String(m.origin || '').slice(0, 200)); rooms.set(room.code, room); }
       isHost = true; room.hosts.add(ws);
-      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, ...worldCfg() }); room.roster(); return;
+      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD }); room.roster(); return;
     }
     if (m.t === 'join') {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
@@ -484,10 +418,10 @@ wss.on('connection', (ws) => {
       else {
         if (room.players.size >= MAX_PLAYERS) return ws.send(JSON.stringify({ t: 'error', text: 'This game is full.' }));
         const base = clean(m.name) || 'Explorer'; let name = base; for (let k = 2; [...room.players.values()].some(x => x.name === name); k++) name = base.slice(0, 14 - String(k).length) + k;
-        p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws, false, m.hat);
+        p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws);
       }
-      me = p; room.send(ws, { t: 'joined', id: p.id, token: p.token, name: p.name, color: p.color, hat: p.hat, code: room.code, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, ...worldCfg() });
-      if (room.phase === 'play' && room.q.stage !== 'break') { const Q = QUESTIONS[room.q.qid]; room.send(ws, { t: 'question', n: room.q.n, q: Q.q, opts: Q.opts, time: Math.max(0, room.q.until - room.time) }); }
+      me = p; room.send(ws, { t: 'joined', id: p.id, token: p.token, name: p.name, color: p.color, code: room.code, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD });
+      if (room.phase === 'play' && room.q.stage !== 'break') { const Q = QUESTIONS[room.q.qid]; room.send(ws, { t: 'question', n: room.q.n, q: Q.q, opts: room.q.opts || Q.opts, time: Math.max(0, room.q.until - room.time) }); }
       room.roster(); return;
     }
     if (!room) return;
@@ -502,8 +436,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0; }
-    if (m.t === 'em') { const e = clamp(m.e | 0, 1, 3); me.emote = e; me.emoteT = room.time + 2.2; room.ev({ k: 'emote', id: me.id, e, x: me.x, y: me.y }); }
+    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0; }
   });
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });
