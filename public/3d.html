@@ -79,7 +79,7 @@ body.host #feed{top:330px}body.host #qban{width:min(1150px,66vw);top:auto;bottom
 #feed div{transition:opacity .8s;background:rgba(0,0,0,.45);padding:4px 10px;border-radius:10px;animation:pop .3s}
 #fact{position:absolute;left:auto;right:16px;bottom:168px;transform:translateY(8px);width:min(260px,28vw);padding:8px 11px;font-size:13px;line-height:1.35;opacity:0;transition:.25s;border-color:var(--ice);text-align:left;z-index:4}
 #fact.on{opacity:1;transform:none}#fact b{color:var(--ice);font-size:10px;letter-spacing:1.5px;display:block;margin-bottom:3px}
-body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size:15px}
+body.host #fact{left:16px;right:auto;top:86px;bottom:auto;width:min(320px,26vw);font-size:15px}
 #banner{position:absolute;left:50%;top:16px;transform:translateX(-50%) translateY(-6px) scale(.96);font-size:15px;color:var(--gold);text-shadow:0 2px 0 #7a2d00,0 0 12px #ff8a3d;opacity:0;transition:.2s;text-align:center;width:auto;max-width:min(280px,30vw);white-space:nowrap;pointer-events:none;z-index:6;letter-spacing:.4px}
 #banner.on{opacity:1;transform:translateX(-50%) scale(1)}
 #qban.on~#banner{display:none}
@@ -101,9 +101,9 @@ body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size
 /* podium */
 #end{z-index:8;background:radial-gradient(ellipse at 50% 30%,#2a1670,#070512 75%)}
 .pod{display:flex;align-items:flex-end;gap:14px;margin:18px 0}
-.pod>div{width:min(200px,29vw);display:flex;flex-direction:column;align-items:center;animation:rise .9s cubic-bezier(.2,1.4,.5,1) both}
+.pod>div{width:min(200px,29vw);display:flex;flex-direction:column;align-items:center;animation:rise .55s cubic-bezier(.2,1.4,.5,1) both}
 .pod .blk{width:100%;border-radius:16px 16px 0 0;display:grid;place-items:center;border:1px solid var(--line);margin-top:8px}
-.pod .p1{animation-delay:.9s}.pod .p1 .blk{height:150px;background:linear-gradient(#ffd43b66,#ffd43b11)}.pod .p2{animation-delay:.45s}.pod .p2 .blk{height:105px;background:linear-gradient(#ced4da55,#ced4da11)}.pod .p3 .blk{height:75px;background:linear-gradient(#e8590c55,#e8590c11)}
+.pod .p1{animation-delay:.25s}.pod .p1 .blk{height:150px;background:linear-gradient(#ffd43b66,#ffd43b11)}.pod .p2{animation-delay:.12s}.pod .p2 .blk{height:105px;background:linear-gradient(#ced4da55,#ced4da11)}.pod .p3 .blk{height:75px;background:linear-gradient(#e8590c55,#e8590c11)}
 .pod small{opacity:.8;font-size:12px}
 @keyframes rise{from{transform:translateY(120%);opacity:0}}
 .pod b{font-size:clamp(14px,2vw,22px);margin-top:4px}.pod em{font-style:normal;color:var(--gold);font-size:clamp(16px,2.4vw,26px)}.pod .pl{font-size:46px;opacity:.85}
@@ -130,6 +130,7 @@ body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size
 #camHint{display:none!important}
 #scope{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;transition:opacity .16s ease;background:none}#scope.on{opacity:1}#scope .sr{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px}#scope .sr:before,#scope .sr:after{content:"";position:absolute;background:#e8fff8;box-shadow:0 0 3px #0008}#scope .sr:before{left:10px;top:0;width:2px;height:22px}#scope .sr:after{top:10px;left:0;height:2px;width:22px}#scope .ring{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border:2px solid rgba(230,255,245,.7);border-radius:50%;background:none;box-shadow:0 0 0 1px rgba(0,0,0,.3),0 0 8px rgba(180,255,230,.18)}#scope .ring:after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;border:1px solid rgba(230,255,245,.85);background:none;box-shadow:none}
 #reconn{position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:55;display:none;background:rgba(10,8,28,.9);border:1px solid var(--line);border-radius:999px;padding:8px 18px;font-size:14px;pointer-events:none;letter-spacing:.3px;box-shadow:0 8px 24px #0008}#reconn.on{display:block}
+#hostPlay{display:none;position:absolute;left:16px;right:auto;top:16px;z-index:6;pointer-events:auto}body.host #hud.on #hostPlay{display:block}#hostPlay button{font-size:14px;padding:8px 14px}
 #pause{position:fixed;inset:0;background:rgba(6,4,18,.78);display:none;align-items:center;justify-content:center;z-index:40;pointer-events:auto}
 #pause.on{display:flex}#pause .card{width:min(380px,90vw);text-align:left}
 #pause label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;font-size:15px}
@@ -150,6 +151,7 @@ body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size
 
 <div id="hud"><div id="vig"></div><div id="xh"><i></i></div><div id="ammo" class="disp"><b id="ammoN">10</b><small id="ammoD">/ 10</small><span id="ammoLbl">BLASTER</span><i id="rbar"><b></b></i></div><div id="hm"></div><div id="lockp">Click to play</div><div id="me" class="pnl disp"><div class="r" id="meName"></div><div class="s" id="meScore">0</div><div class="r" id="meRank"></div><div id="hpw" title="Health: 2 blaster hits or 3 punches = KO. Jump-punch slam is a one-hit KO (then a cooldown). Heals after 4 s."><i id="hpb"></i></div></div>
 <div id="clock" class="pnl disp"><div class="t" id="clockT">6:00</div><div class="n" id="clockN"></div></div>
+<div id="hostPlay"><button type="button" id="endNowBtn" class="ghost small">End game</button></div>
 <div id="lb" class="pnl"></div><div id="feed"></div>
 <div id="qban" class="pnl"><div class="h disp" id="qbH"></div><div id="qbStreak" class="disp"></div><div class="q disp" id="qbQ"></div><div class="ops" id="qbO"></div><div class="bar"><b id="qbB"></b></div></div><div id="qres" class="disp"></div>
 <div id="hotbar"><div class="slot sel" data-t="0" title="Blaster"><b>1</b><span>🔫</span><em class="ammo" id="slotAmmo">10</em><i class="cd"></i><i class="mt"><i></i></i></div><div class="slot" data-t="1" title="Punch / slam"><b>2</b><span>👊</span><i class="cd"></i><i class="mt" title="Slam cooldown"><i></i></i></div><div class="slot" data-t="2" title="Shield"><b>3</b><span>🛡️</span><i class="cd"></i><i class="mt"><i></i></i></div><div class="slot dash" id="qSlot" title="Dash"><b>Q</b><span>💨</span><i class="cd"></i></div><div class="slot dash" id="dashSlot" title="Jump"><b>␣</b><span>⤴</span></div></div>
@@ -164,7 +166,7 @@ body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size
 <label>Look sensitivity <input type="range" class="sens" min="4" max="20" value="10"></label>
 <label>Quality <select id="qualSel" style="width:auto;font-size:15px;padding:6px 10px"><option value="auto">Auto</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></label>
 <label>Camera <span><button class="ghost small" id="camToggle" type="button">First person</button></span></label>
-<p style="opacity:.75;font-size:13px;margin:8px 0 0">C also toggles first / third person. Click the game to look around.</p>
+<p style="opacity:.75;font-size:13px;margin:8px 0 0;line-height:1.45"><kbd>W A S D</kbd> move · <kbd>Space</kbd> jump · <kbd>Q</kbd> dash · <kbd>E</kbd> aim · <kbd>R</kbd> reload · <kbd>1</kbd>–<kbd>3</kbd> tools<br>C also toggles first / third person. Click the game to look around.</p>
 <div class="row"><button id="resumeBtn">Resume</button></div></div></div>
 
 <!-- join -->
@@ -197,7 +199,7 @@ body.host #fact{left:16px;right:auto;bottom:16px;width:min(360px,28vw);font-size
 
 <script type="module">import * as THREE from '/vendor/three.module.js';window.THREE=THREE;window.dispatchEvent(new Event('three-ready'));</script>
 <script>
-'use strict';window.RR_BUILD='r7';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
+'use strict';window.RR_BUILD='r7b';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rnd=(a,b)=>a+Math.random()*(b-a),lerp=(a,b,t)=>a+(b-a)*t;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const IS_HOST=location.pathname.endsWith('/host')||new URLSearchParams(location.search).has('host');
@@ -207,7 +209,7 @@ const WNAME={pebble:'Pebble Blaster',cannon:'Meteor Cannon',laser:'Comet Tail La
 const TOOLI=['🔫','👊','🛡️'],TOOLN=['Blaster','Punch','Shield'],ACOL=['#ff6b6b','#4dabf7','#ffd43b','#69db7c'],ALET=['A','B','C','D'];
 const WCOL={cannon:'#ff8a3d',laser:'#66e3ff',crater:'#ffd43b',gbomb:'#b197fc',shield:'#8ce99a'};
 const HOW_OLD=[['🕹️','Move','<kbd>W A S D</kbd> or arrows<br>Phone: joystick'],['🎯','Aim + shoot','Mouse to aim, <kbd>click</kbd> or <kbd>Space</kbd><br>Phone: FIRE auto-aims'],['❓','Answer','Questions pop up for everyone. <kbd>1</kbd>–<kbd>4</kbd> or tap. Fast + right = big points'],['🏆','Win','One hit = BONK! Most points at the end wins']];
-const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · click the game, then move the mouse to look<br><kbd>Space</kbd> jump (twice!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> dash (look up or dash in the air to launch upward) · <kbd>C</kbd> third person · <kbd>Esc</kbd> pause / settings'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> or <b>scroll wheel</b> to switch · <kbd>Left click</kbd> to use<br><kbd>R</kbd> reloads the blaster · hold or tap <kbd>E</kbd> to aim down the blaster sights'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one!'],['🏆','Score','Right answer <b>+200</b> · KO someone <b>+100</b><br>Wrong answer, meteor hit, or getting KO\'d <b>−50</b> (never below 0)']];
+const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · click the game, then move the mouse to look<br><kbd>Space</kbd> jump (twice!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> dash (look up or dash in the air to go up · 2.5s cooldown) · <kbd>C</kbd> third person · <kbd>Esc</kbd> pause / settings'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> or <b>scroll wheel</b> to switch · <kbd>Left click</kbd> to use<br><kbd>R</kbd> reloads the blaster · hold or tap <kbd>E</kbd> to aim down the blaster sights'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one!'],['🏆','Score','Right answer <b>+200</b> · KO someone <b>+100</b><br>Wrong answer, meteor hit, or getting KO\'d <b>−50</b> (never below 0)']];
 const WL=[['🔫','1 · Blaster','2 shots = KO · 10 rounds, then reload (or press R)'],['👊','2 · Punch','3 hits = KO · jump + click = slam, a 1-hit KO (then a cooldown)'],['🛡️','3 · Shield','hold to block from the front · bounces shots back']];
 const WL_OLD=[['🪨','Pebble Blaster','always on, one hit KO'],['🔥','Meteor Cannon','huge, smashes through rocks'],['💫','Comet Tail Laser','instant beam across the map'],['💥','Vesta Crater Blast','shockwave around you'],['🌀','Gravity Bomb','sucks everyone in, then pops'],['🛡️','Shield','blocks one hit · 💎 crystal = bonus question']];
 function fillHow(){$('#how1').innerHTML=HOW.map(h=>`<div><b>${h[0]}</b><div class="disp">${h[1]}</div>${h[2]}</div>`).join('');$('#wl1').innerHTML=WL.map(w=>`<div><span>${w[0]}</span><div><b>${w[1]}</b><br><small>${w[2]}</small></div></div>`).join('')}
@@ -317,7 +319,7 @@ $('#nick').value=localStorage.rrNick||'';
 function doJoin(){ac();const code=$('#code').value.trim().toUpperCase(),name=$('#nick').value.trim();if(code.length<4)return $('#err').textContent='Type the 4-letter code from the big screen';if(!name)return $('#err').textContent='Pick a nickname';
  localStorage.rrNick=name;$('#err').textContent='';const old=JSON.parse(sessionStorage.rrPlayer||'null');send({t:'join',code,name,color:myColor,token:old&&old.code===code?old.token:undefined})}
 $('#joinBtn').onclick=doJoin;$('#nick').onkeydown=$('#code').onkeydown=e=>{if(e.key==='Enter')doJoin()};
-if(IS_HOST){show('hostLobby');$('#startBtn').onclick=()=>{ac();send({t:'start',duration:+$('#dur').value})};$('#addBots').onclick=()=>send({t:'bots',n:3});$('#clearBots').onclick=()=>send({t:'clearbots'});$('#botLvl').onchange=e=>send({t:'botlevel',v:e.target.value})}
+if(IS_HOST){show('hostLobby');$('#startBtn').onclick=()=>{ac();send({t:'start',duration:+$('#dur').value})};$('#addBots').onclick=()=>send({t:'bots',n:3});$('#clearBots').onclick=()=>send({t:'clearbots'});$('#botLvl').onchange=e=>send({t:'botlevel',v:e.target.value});const eb=$('#endNowBtn');if(eb)eb.onclick=()=>{if(phase==='play'&&confirm('End the game and show the results?'))send({t:'endnow'})}}
 
 // ---------------- answer asteroids ----------------
 let curQ=null,myPick=-1,qresT=0,quizOpen=false;
@@ -331,7 +333,7 @@ function reveal(m){if(!curQ)return;curQ.a=m.a;curQ.end=0;$$('#qbO i').forEach((e
 function qres(t,c){$('#qres').textContent=t;$('#qres').style.color=c;$('#qres').classList.add('on');clearTimeout(qresT);qresT=setTimeout(()=>$('#qres').classList.remove('on'),1800)}
 function closeQuiz(){}
 // ---------------- popups ----------------
-let factT=0,bannerT=0;function fact(t,title){if(curQ&&curQ.a<0)return;$('#tip').style.display='none';$('#fact b').textContent=title||'SCIENCE FACT';$('#factT').textContent=t;$('#fact').classList.add('on');clearTimeout(factT);factT=setTimeout(()=>{$('#fact').classList.remove('on');$('#fact b').textContent='SCIENCE FACT'},5600)}
+let factT=0,bannerT=0;function fact(t,title){if(!t)return;$('#tip').style.display='none';$('#fact b').textContent=title||'SCIENCE FACT';$('#factT').textContent=t;$('#fact').classList.add('on');clearTimeout(factT);factT=setTimeout(()=>{$('#fact').classList.remove('on');$('#fact b').textContent='SCIENCE FACT'},8000)}
 function banner(t){const qon=$('#qban')&&$('#qban').classList.contains('on'),chip=$('#qbStreak'),el=qon&&chip?chip:$('#banner');if(chip&&el!==chip)chip.classList.remove('on');if(el!==$('#banner'))$('#banner').classList.remove('on');el.textContent=t;el.classList.add('on');clearTimeout(bannerT);bannerT=setTimeout(()=>el.classList.remove('on'),2200)}
 function feed(h){const d=document.createElement('div');d.innerHTML=h;$('#feed').prepend(d);while($('#feed').children.length>3)$('#feed').lastChild.remove();setTimeout(()=>{d.style.opacity=0},3200);setTimeout(()=>d.remove(),4000)}
 const TIPS=['🖱️ Click the game to look around. W A S D to move, Space to jump (twice!). C switches to third person.','🧰 1 / 2 / 3 or the scroll wheel picks a tool. Left-click uses it. R reloads the blaster.','☄️ When a question appears, run into the meteor with the right answer! +200 if you\'re right, −50 if you\'re wrong.','👊 Punch three times for a KO. Jump and click for a slam — a one-hit KO, then a cooldown.','💨 Press Q to dash — it launches you further. Look up, or dash in the air, to go upward. Nothing can hit you while dashing.','🏆 Right answers are +200, a KO is +100. Getting KO\'d or hit by a meteor is −50.'];
@@ -418,7 +420,13 @@ function onSnapPred(m,now){
  if(!pr.alive){local.x=pr.x;local.y=pr.y;local.h=pr.h;local.vx=0;local.vy=0;local.vh=0;local._dead=1;return}
  if(local._dead){Object.assign(local,pr);local._dead=0;local._cx=local._cy=local._ch=0;return}
  const err=Math.hypot(local.x-pr.x,local.y-pr.y),eh=Math.abs((local.h||0)-pr.h);
- if(err>600||eh>450){local._cx=(pr.x-local.x);local._cy=(pr.y-local.y);local._ch=(pr.h-(local.h||0));local._ct=1}
+ // A single stale snapshot (or a long client-side dash/teleport the server has not applied yet) must not yank the camera back.
+ if(err>600||eh>450){
+  local._bad=(local._bad||0)+1;
+  const unacked=inSeq>lastAck&&(performance.now()-(lastSendT||0)<700);
+  const speeding=Math.hypot((local.vx||0)+(local.kbx||0),(local.vy||0)+(local.kby||0))>700;
+  if(local._bad>=3&&!unacked&&!speeding){local._cx=(pr.x-local.x);local._cy=(pr.y-local.y);local._ch=(pr.h-(local.h||0));local._ct=1;local._bad=0}
+ }else local._bad=0;
 }
 function tickLocal(dt){
  if(!local||IS_HOST||phase!=='play'||local._dead)return;
@@ -986,7 +994,7 @@ function hud(now){
  m0.firstChild.style.setProperty('--w',(reloading?0:ammo*10)+'%');m0.firstChild.style.setProperty('--c',reloading?'#ffd43b':ammo<=0?'#ff6b6b':ammo<=3?'#ffa94d':'#ffd43b');slots[0].classList.toggle('hot',reloading);slots[0].classList.toggle('re',reloading);
  const sa=$('#slotAmmo');if(sa)sa.textContent=reloading?'…':ammo;
  if(m1&&m1.firstChild){m1.firstChild.style.setProperty('--w',((7-slamCd)/7*100)+'%');m1.firstChild.style.setProperty('--c',slamCd>0?'#ffa94d':'#69db7c')}
- m2.firstChild.style.setProperty('--w',en+'%');m2.firstChild.style.setProperty('--c',en<12?'#868e96':'#74c0fc');$('#qSlot .cd').style.setProperty('--p',((mp[17]||0)/2.2*100)+'%');
+ m2.firstChild.style.setProperty('--w',en+'%');m2.firstChild.style.setProperty('--c',en<12?'#868e96':'#74c0fc');$('#qSlot .cd').style.setProperty('--p',((mp[17]||0)/(PHYS.DASH_CD||2.55)*100)+'%');
  const hp=mp[4]&1?(mp[14]??100):0;$('#hpb').style.width=hp+'%';$('#hpb').style.background=hp>60?'':hp>30?'#fcc419':'#ff6b6b';const hpw=$('#hpw');if(hpw)hpw.dataset.hp=Math.round(hp)+' HP';
  const box=$('#ammo');if(box){box.style.display='block';const N=$('#ammoN'),D=$('#ammoD'),L=$('#ammoLbl'),rb=$('#rbar b');
   box.classList.toggle('re',reloading||(myTool===1&&slamCd>0));box.classList.toggle('empty',myTool===0&&!reloading&&ammo<=0);

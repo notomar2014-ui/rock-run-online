@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r7';
+const BUILD = 'r7b';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -162,10 +162,11 @@ class Room {
   grab(p, a) {
     const q = this.q, Q = QUESTIONS[q.qid]; if (q.picks.has(p.id)) return;
     const ok = a.i === (q.correct ?? Q.a); let pts;
+    const wasFirst = ok && !q.firstRight;
     if (ok) { pts = PTS_RIGHT; q.firstRight = true; p.correct++; }
     else pts = -Math.min(PTS_WRONG, p.score);
     p.score += pts; q.picks.set(p.id, a.i);
-    this.send(p.ws, { t: 'grabbed', i: a.i, ok, pts, first: ok && !q.firstRight });
+    this.send(p.ws, { t: 'grabbed', i: a.i, ok, pts, first: wasFirst });
     this.ev({ k: 'grab', id: p.id, x: a.x, y: a.y, i: a.i, pts, ok: ok ? 1 : 0 });
     this.dirtyRoster = true;
     const active = [...this.players.values()].filter(x => x.connected || x.bot);
@@ -495,7 +496,16 @@ wss.on('connection', (ws) => {
         p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws);
       }
       me = p; room.send(ws, { t: 'joined', id: p.id, token: p.token, name: p.name, color: p.color, code: room.code, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD, world: worldCfg() });
-      if (room.phase === 'play' && room.q.stage !== 'break') { const Q = QUESTIONS[room.q.qid]; room.send(ws, { t: 'question', n: room.q.n, q: Q.q, opts: room.q.opts || Q.opts, time: Math.max(0, room.q.until - room.time) }); }
+      if (room.phase === 'play' && room.q.stage !== 'break' && QUESTIONS[room.q.qid]) {
+        const Q = QUESTIONS[room.q.qid], q = room.q;
+        room.send(ws, { t: 'question', n: q.n, q: Q.q, opts: q.opts || Q.opts, time: Math.max(0, q.until - room.time) });
+        if (q.stage === 'reveal') {
+          const ans = q.correct ?? Q.a, right = [...q.picks.values()].filter(i => i === ans).length;
+          room.send(ws, { t: 'reveal', a: ans, fact: Q.fact, right, picked: q.picks.size });
+          const pick = q.picks.get(p.id);
+          if (pick != null) room.send(ws, { t: 'grabbed', i: pick, ok: pick === ans, pts: 0 });
+        }
+      }
       room.roster(); return;
     }
     if (!room) return;
