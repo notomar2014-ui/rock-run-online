@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: rock-run-online
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: SINGLE_PROCESS
+        value: "1"
+      - key: NODE_VERSION
+        value: "22"

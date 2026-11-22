@@ -1,0 +1,21 @@
+{
+  "name": "rock-run-online",
+  "version": "1.0.0",
+  "description": "Rock Run Online: Rocks in Space. Class arena + quiz game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "python3 test.py"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "three": "^0.187.0",
+    "ws": "^8.23.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
