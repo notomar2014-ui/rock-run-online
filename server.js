@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r6b';
+const BUILD = 'r6c';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed

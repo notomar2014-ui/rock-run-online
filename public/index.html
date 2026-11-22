@@ -58,8 +58,8 @@ a{color:var(--ice)}
 .slot.dash{width:58px;height:58px;border-radius:50%}.slot.dash .cd{border-radius:50%}.slot.dash span{font-size:22px}
 #qban{position:absolute;left:50%;top:76px;transform:translateX(-50%);width:min(820px,94vw);padding:10px 16px 12px;text-align:center;display:none;border:2px solid var(--gold);background:rgba(18,12,46,.92)}
 #qban.on{display:block;animation:pop .35s}#qban .h{font-size:12px;letter-spacing:2px;color:var(--gold);text-transform:uppercase}
-#qban .q{font-size:clamp(17px,2.5vw,26px);line-height:1.2;margin:4px 0 8px}
-#qban .ops{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;font-size:14px}#qban .ops i{font-style:normal;padding:3px 10px;border-radius:99px;color:#fff;font-weight:900}
+#qban .q{font-size:clamp(17px,2.5vw,26px);line-height:1.2;margin:4px 0 2px}
+#qban .ops{display:none}
 #qban .ops i.dim{opacity:.3}#qban .ops i.right{outline:3px solid #fff}
 #qban .bar{height:6px;background:#fff2;border-radius:6px;overflow:hidden;margin-top:8px}#qban .bar b{display:block;height:100%;background:var(--gold);width:100%;transition:width .3s linear}
 #qres{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);font-size:clamp(26px,4vw,44px);text-align:center;text-shadow:0 4px 0 #000a,0 0 24px #000;opacity:0;transition:.25s;pointer-events:none}#qres.on{opacity:1}
@@ -239,7 +239,7 @@ if(IS_HOST){show('hostLobby');$('#startBtn').onclick=()=>{ac();send({t:'start',d
 let curQ=null,myPick=-1,qresT=0,quizOpen=false;
 function question(m){curQ={n:m.n,q:m.q,opts:m.opts,a:-1,end:performance.now()+m.time*1000,time:m.time};myPick=-1;
  $('#qbH').textContent=`Question ${m.n} · fly into the right answer asteroid!`;$('#qbQ').textContent=m.q;
- $('#qbO').innerHTML=m.opts.map((o,i)=>`<i style="background:${ACOL[i]}${i===2?';color:#2a1a00':''}">${ALET[i]}: ${esc(o)}</i>`).join('');$('#qban').classList.add('on');SFX.wave();$('#fact').classList.remove('on');$('#tip').style.display='none';$('#banner').classList.remove('on')}
+ $('#qbO').innerHTML='';$('#qban').classList.add('on');SFX.wave();$('#fact').classList.remove('on');$('#tip').style.display='none';$('#banner').classList.remove('on')}
 function grabbed(m){myPick=m.i;qres(m.ok?`✅ Correct! +${m.pts}${m.first?' (first!)':''}`:`❌ Wrong! ${m.pts?m.pts:'-0'}`,m.ok?'#8ce99a':'#ff8787');m.ok?SFX.right():SFX.wrong();
  $$('#qbO i').forEach((e,i)=>e.classList.toggle('dim',i!==m.i))}
 function reveal(m){if(!curQ)return;curQ.a=m.a;curQ.end=0;$$('#qbO i').forEach((e,i)=>{e.classList.toggle('dim',i!==m.a);e.classList.toggle('right',i===m.a)});
