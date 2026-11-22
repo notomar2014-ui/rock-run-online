@@ -43,7 +43,7 @@ const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) &&
   let hits = 0, hpOk = true, finite = true, bounds = true, t0 = Date.now(), snaps = 0, gaps = 0, lastT = Date.now();
   while (Date.now() - t0 < 6000) { const s = h2.snap; h2.snap = null; if (s) { snaps++; const now = Date.now(); gaps = Math.max(gaps, now - lastT); lastT = now;
       hits += (s.ev||[]).filter(e => e.k === 'hit').length; finite = finite && finiteSnap(s);
-      for (const p of s.p) { if (p[14] < 0 || p[14] > 100) hpOk = false; if (p[1] < 0 || p[1] > 3200 || p[2] < 0 || p[2] > 2000) bounds = false; } } await sleep(10); }
+      for (const p of s.p) { if (p[14] < 0 || p[14] > 100) hpOk = false; if (p[1] < 0 || p[1] > 4800 || p[2] < 0 || p[2] > 3000) bounds = false; } } await sleep(10); }
   ok(finite, 'all positions/numbers stay finite after NaN / Infinity / garbage input');
   ok(bounds, 'everyone stays inside the arena');
   ok(hpOk, 'health always between 0 and 100');

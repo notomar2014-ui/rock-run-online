@@ -33,7 +33,7 @@ function toward(a, b) {
   await sleep(800);
   const h = client(); await h.open; h.send({ t: 'host', origin: 'http://x' });
   const hosted = await h.wait('hosted');
-  ok(hosted && hosted.build === 'r6', 'host reports build r6 (' + (hosted && hosted.build) + ')');
+  ok(hosted && /^r6/.test(hosted.build), 'host reports build r6x (' + (hosted && hosted.build) + ')');
   const code = hosted.code;
   const A = client(), B = client();
   await A.open; A.send({ t: 'join', code, name: 'Alpha' });
@@ -149,13 +149,13 @@ function toward(a, b) {
     // Wait for landing
     const t1 = Date.now();
     let grabbed = null;
-    while (Date.now() - t1 < 20000) {
+    while (Date.now() - t1 < 40000) {
       const s = A.snap || h.snap;
       const mep = s && s.p.find(p => p[0] === A.id);
       const meteor = s && (s.a || []).find(a => a[0] === ci);
       if (mep && meteor && meteor[4] === 0) {
         const to = toward(mep, [0, meteor[1], meteor[2]]);
-        A.send({ t: 'in', mx: to.mx, my: to.my, a: to.a, f: 0, tool: 0, n: n++ });
+        A.send({ t: 'in', mx: to.mx, my: to.my, a: to.a, f: 0, tool: 0, s: 1, n: n++ });
       } else if (mep) {
         A.send({ t: 'in', mx: 0, my: 0, a: 0, f: 0, tool: 0, n: n++ });
       }

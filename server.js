@@ -4,14 +4,47 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r6';
+const BUILD = 'r6b';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
 const TICK = 40, SNAP_EVERY = 2;      // 40 Hz physics, 20 Hz snapshots (smoother, still light)
-const W = 3200, H = 2000;
-const CERES = { x: 1050, y: 1000, r: 130, gm: 130 * 130 * 5 };
-const VESTA = { x: 2170, y: 980, r: 100, gm: 100 * 100 * 3.5 }; // less mass -> weaker pull, lumpy
+const W = 4800, H = 3000; // ~1.5× arena (still light for school laptops)
+const CERES = { x: 1575, y: 1500, r: 160, gm: 160 * 160 * 5 };
+const VESTA = { x: 3255, y: 1470, r: 130, gm: 130 * 130 * 3.5 }; // less mass -> weaker pull, lumpy
+// Raised plateaus (h in game units) with a ramp on one side; pillars are solid cover.
+const PLATS = [
+  { x: 1050, y: 700, w: 520, d: 360, h: 90, ramp: { dir: 's', len: 220 } },
+  { x: 3850, y: 2350, w: 480, d: 340, h: 80, ramp: { dir: 'n', len: 200 } },
+];
+const PILLARS = [
+  { x: 1500, y: 1050, r: 46, h: 240 }, { x: 1820, y: 1050, r: 46, h: 240 },
+  { x: 3300, y: 1900, r: 58, h: 280 },
+  { x: 800, y: 2100, r: 50, h: 220 },
+  { x: 4100, y: 800, r: 54, h: 250 },
+  { x: 2400, y: 500, r: 42, h: 200 },
+  { x: 2000, y: 2600, r: 48, h: 210 },
+  { x: 3000, y: 700, r: 44, h: 190 },
+];
+const OCCATOR = { x: 1700, y: 2300, r: 340 };
+function floorAt(x, y) {
+  let fl = 0;
+  for (const p of PLATS) {
+    const dx = x - p.x, dy = y - p.y;
+    if (Math.abs(dx) <= p.w / 2 && Math.abs(dy) <= p.d / 2) fl = Math.max(fl, p.h);
+    if (p.ramp) {
+      const L = p.ramp.len, dir = p.ramp.dir;
+      let t = -1;
+      if (dir === 's' && dy > p.d / 2 && dy < p.d / 2 + L && Math.abs(dx) <= p.w / 2) t = 1 - (dy - p.d / 2) / L;
+      if (dir === 'n' && dy < -p.d / 2 && dy > -p.d / 2 - L && Math.abs(dx) <= p.w / 2) t = 1 - (-p.d / 2 - dy) / L;
+      if (dir === 'e' && dx > p.w / 2 && dx < p.w / 2 + L && Math.abs(dy) <= p.d / 2) t = 1 - (dx - p.w / 2) / L;
+      if (dir === 'w' && dx < -p.w / 2 && dx > -p.w / 2 - L && Math.abs(dy) <= p.d / 2) t = 1 - (-p.w / 2 - dx) / L;
+      if (t >= 0) fl = Math.max(fl, p.h * Math.max(0, Math.min(1, t)));
+    }
+  }
+  return fl;
+}
+function worldCfg() { return { W, H, plats: PLATS, pillars: PILLARS, occator: OCCATOR }; }
 const Q_TIME = 25, REVEAL_TIME = 4, BREAK_TIME = 15, FIRST_BREAK = FAST ? 5 : 10;
 const PTS_RIGHT = 200, PTS_WRONG = 50, PTS_KO = 100, PTS_DIE = 50, PTS_METEOR = 50; // Omar: +200 right, +100 KO, -50 wrong / meteor / death (never below 0)
 const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.2, DASH_V = 900, IFRAME = 0.3;
@@ -24,7 +57,7 @@ const TOOLS = [
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
-const ANSWER_SPOTS = [[520, 420], [1610, 360], [2760, 420], [520, 1580], [1610, 1640], [2760, 1580], [1610, 1000], [330, 1000], [2950, 1000]];
+const ANSWER_SPOTS = [[780, 630], [2415, 540], [4140, 630], [780, 2370], [2415, 2460], [4140, 2370], [2415, 1500], [495, 1500], [4425, 1500]];
 const SPAWN_SAFE = 3;
 // bot difficulty: think = reaction time (s), aim = aim error (rad), fire = chance to shoot per think, fight = chance to be in a fighting mood,
 // range = how far they will chase, selfDefense = always fight back this close, humanAvoid = >1 means they pick on bots before kids,
@@ -61,7 +94,7 @@ class Room {
     this.q = { stage: 'break', until: FIRST_BREAK, qid: -1, n: 0, ans: [], firstRight: false, picks: new Map() };
     this.nextChaos = FAST ? 3 : 30; this.qOrder = shuffle([...QUESTIONS.keys()]); this.qi = 0;
     this.rockDirty = true; this.rockSnap = null;
-    for (let i = 0; i < 24; i++) this.spawnRock();
+    for (let i = 0; i < 32; i++) this.spawnRock();
   }
   freeSpot(margin = 160) {
     for (let k = 0; k < 40; k++) {
@@ -103,7 +136,7 @@ class Room {
   start(duration) {
     this.duration = clamp(duration | 0 || 360, FAST ? 20 : 120, 900); this.reset(); this.phase = 'play';
     for (const p of this.players.values()) { Object.assign(p, { score: 0, kos: 0, deaths: 0, streak: 0, correct: 0, cds: [0, 0, 0], dashCd: 0, ammo: 10, reloading: 0, slamCd: 0 }); this.respawn(p); }
-    this.toAll({ t: 'start', duration: this.duration, build: BUILD }); this.roster();
+    this.toAll({ t: 'start', duration: this.duration, build: BUILD, world: worldCfg() }); this.roster();
   }
   end() {
     this.phase = 'end';
@@ -288,12 +321,13 @@ class Room {
       }
       p.qPrev = inp.q ? 1 : 0;
       p.vx += (mx * sp - p.vx) * k; p.vy += (my * sp - p.vy) * k;
-      const grounded = p.h <= 0;
-      if (grounded) p.jumps = 2;
-      if (inp.dash && !p.jPrev && p.jumps > 0) { p.vh = p.jumps === 2 ? JUMP_V : JUMP_V * 0.85; p.jumps--; this.ev({ k: 'jump', id: p.id, x: p.x, y: p.y, d: p.jumps === 0 ? 1 : 0 }); }
+      const fl = floorAt(p.x, p.y);
+      let grounded = p.h <= fl + 0.6;
+      if (grounded && p.vh <= 0) { p.h = fl; p.vh = 0; p.jumps = 2; }
+      if (inp.dash && !p.jPrev && p.jumps > 0) { p.vh = p.jumps === 2 ? JUMP_V : JUMP_V * 0.85; p.jumps--; p.h = Math.max(p.h, fl + 1); this.ev({ k: 'jump', id: p.id, x: p.x, y: p.y, d: p.jumps === 0 ? 1 : 0 }); grounded = false; }
       p.jPrev = inp.dash ? 1 : 0;
-      if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h = Math.max(0, p.h + p.vh * dt); if (p.h <= 0) p.vh = 0; }
-      if (p.slam && p.h <= 0) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
+      if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h += p.vh * dt; const fl2 = floorAt(p.x, p.y); if (p.h <= fl2 && p.vh <= 0) { p.h = fl2; p.vh = 0; } if (p.h < 0) { p.h = 0; p.vh = 0; } }
+      if (p.slam && p.h <= floorAt(p.x, p.y) + 0.6) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
         for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 160) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
       if (inp.f) this.use(p);
       if (!p.seenWell.c && this.time > 4) { p.seenWell.c = 1; this.fact(p, pick(FACTS.ceres)); }
@@ -301,11 +335,13 @@ class Room {
       const kd = Math.pow(0.012, dt); p.kbx *= kd; p.kby *= kd;
       if (!Number.isFinite(p.x + p.y + p.h + p.vh + p.vx + p.vy + p.kbx + p.kby)) { this.respawn(p); continue; } // never let a NaN escape
       for (const r of this.rocks) { const d = dist(p, r), m = r.r + 18; if (d < m && d > 0 && p.h < r.r * 1.2) { const nx = (p.x - r.x) / d, ny = (p.y - r.y) / d; p.x = r.x + nx * m; p.y = r.y + ny * m; r.vx -= nx * 20; r.vy -= ny * 20; } }
+      for (const r of PILLARS) { const d = dist(p, r), m = r.r + 18; if (d < m && d > 0 && p.h < r.h) { const nx = (p.x - r.x) / d, ny = (p.y - r.y) / d; p.x = r.x + nx * m; p.y = r.y + ny * m; } }
       if (q.stage === 'question' && !q.picks.has(p.id)) for (const a of q.ans) if (a.landed && Math.hypot(p.x - a.x, p.y - a.y) < a.r + 18) { this.grab(p, a); break; }
     }
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; let dead = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > W || b.y > H;
       if (!dead) for (const r of this.rocks) if (dist(b, r) < r.r + b.r && b.h < r.r * 1.6) { r.hp--; r.vx += b.vx * 0.03; r.vy += b.vy * 0.03; this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
+      if (!dead) for (const r of PILLARS) if (dist(b, r) < r.r + b.r && b.h < r.h) { this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
       // generous hitbox (+ a little extra) so hits feel fair at 15 Hz snapshots with interpolation
       if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 32 + b.r && Math.abs(p.h + 50 - b.h) < 85) {
         if (p.block > 0 && this.front(p, p.x - b.vx, p.y - b.vy)) { // deflect it back toward the shooter
@@ -329,7 +365,7 @@ class Room {
       if (r.x < r.r || r.x > W - r.r) r.vx = (r.x < r.r ? 1 : -1) * Math.abs(r.vx); if (r.y < r.r || r.y > H - r.r) r.vy = (r.y < r.r ? 1 : -1) * Math.abs(r.vy);
       if (r.hp <= 0) { this.rocks.splice(i, 1); this.rockDirty = true; this.ev({ k: 'rock', x: r.x, y: r.y, r: r.r }); if (r.r > 34) for (let j = 0; j < 2; j++) this.spawnRock(r.x + rnd(-10, 10), r.y + rnd(-10, 10), r.r * 0.55, rnd(-110, 110), rnd(-110, 110)); }
     }
-    while (this.rocks.length < 20) this.spawnRock();
+    while (this.rocks.length < 28) this.spawnRock();
     if (this.dirtyRoster || this.tickN % TICK === 0) { this.dirtyRoster = false; this.roster(); }
     this.snapshot();
   }
@@ -407,7 +443,7 @@ wss.on('connection', (ws) => {
       if (m.code && rooms.has(m.code) && rooms.get(m.code).key === m.key) room = rooms.get(m.code);
       else { room = new Room(String(m.origin || '').slice(0, 200)); rooms.set(room.code, room); }
       isHost = true; room.hosts.add(ws);
-      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD }); room.roster(); return;
+      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD, world: worldCfg() }); room.roster(); return;
     }
     if (m.t === 'join') {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
@@ -420,7 +456,7 @@ wss.on('connection', (ws) => {
         const base = clean(m.name) || 'Explorer'; let name = base; for (let k = 2; [...room.players.values()].some(x => x.name === name); k++) name = base.slice(0, 14 - String(k).length) + k;
         p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws);
       }
-      me = p; room.send(ws, { t: 'joined', id: p.id, token: p.token, name: p.name, color: p.color, code: room.code, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD });
+      me = p; room.send(ws, { t: 'joined', id: p.id, token: p.token, name: p.name, color: p.color, code: room.code, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD, world: worldCfg() });
       if (room.phase === 'play' && room.q.stage !== 'break') { const Q = QUESTIONS[room.q.qid]; room.send(ws, { t: 'question', n: room.q.n, q: Q.q, opts: room.q.opts || Q.opts, time: Math.max(0, room.q.until - room.time) }); }
       room.roster(); return;
     }
