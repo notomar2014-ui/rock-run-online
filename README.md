@@ -31,8 +31,8 @@ npm start            # http://localhost:3000
 ## How to play
 | | Laptop | Phone |
 |---|---|---|
-| Look (Roblox-style) | hold **right mouse** and drag to orbit, or click the game to lock the mouse (Esc unlocks). **Scroll = zoom** | drag on the right half of the screen |
-| Move | W A S D · Shift sprint · Space jump (press again in the air = double jump, low gravity!) · Q dodge dash | joystick · JUMP · DASH buttons |
+| Look (Roblox camera) | hold **right mouse** + drag to orbit (mouse is never locked) · **← →** arrows turn the camera · **scroll = zoom** | drag on the right half of the screen |
+| Move | W A S D / ↑ ↓ (relative to the camera; your astronaut turns to face where it walks) · Shift sprint · Space jump (press again in the air = double jump, low gravity!) · Q dodge dash | joystick · JUMP · DASH buttons |
 | Tools | 1 / 2 / 3 to pick, left-click to use, aim with the crosshair | tap a tool button (auto-aims) |
 
 - **Answer meteors:** about every 15 s of fighting, a question appears as a banner at the top and 4 glowing lettered meteors (A red, B blue, C yellow, D green, answer written above) crash down onto Ceres. Play keeps going. Run into one to choose it (one pick per question). Right = +300 (+200 more if you're first), wrong = -100 (never below 0). Off-screen arrows and minimap squares show where they are. Then the answer is revealed with a slide fact, and 15 s of fighting follow.
@@ -45,8 +45,8 @@ npm start            # http://localhost:3000
 Everyone has 100 health (bar above heads). Health comes back after 4 s without being hit. KO = +50 (+10 per streak) for the attacker, and the player who gets knocked out loses 30 (never below 0); a right answer is +300, so answering matters most.
 | Slot | Tool | What it does |
 |---|---|---|
-| 1 🔫 | Blaster | glowing shots with travel time, 34 damage (3 hits = KO). Heat meter: 5 quick shots overheats it for a moment. Sprinting spreads your aim |
-| 2 👊 | Punch | lunge + wide swing, combo 25/25/40 damage (3rd hit launches people into the air). Punch while in the air = GROUND SLAM shockwave |
+| 1 🔫 | Blaster | fast glowing shots (~6.7 per second, very quick bullets), 26 damage (4 hits = KO), fired toward the crosshair. Heat meter: ~10 quick shots overheat it; it cools fast. Sprinting spreads your aim |
+| 2 👊 | Punch | near-instant punches (0.18 s), lunge + wide swing, combo 20/20/32 damage (3rd hit launches people into the air). Punch while in the air = GROUND SLAM shockwave |
 | 3 🛡️ | Shield | hold click to block from the front; reflects blaster shots back at the shooter. Uses energy (blue bar), you move slower |
 | Q 💨 | Dodge dash | quick dash, can't be hit during it, 2.2 s cooldown |
 

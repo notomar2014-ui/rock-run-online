@@ -18,8 +18,8 @@ const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.3, speed: 760, life: 1.0, r: 8, dmg: 34, heat: 20 },          // 3 hits to KO, overheats after 5 quick shots
-  { name: 'Punch', cd: 0.38, reach: 110, arc: 1.5, dmg: [25, 25, 40], combo: 0.9 },       // 3-hit combo, last hit launches
+  { name: 'Blaster', cd: 0.15, speed: 1750, life: 0.6, r: 8, dmg: 26, heat: 11 },         // fast: ~6.7 shots/s, 4 hits to KO, overheats after ~10 quick shots
+  { name: 'Punch', cd: 0.18, reach: 110, arc: 1.5, dmg: [20, 20, 32], combo: 0.9 },       // near-instant punches, 3-hit combo, last hit launches
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
@@ -170,7 +170,7 @@ class Room {
     } else if (t === 1) {
       if (p.h > 70 && !p.slam) { p.slam = 1; p.vh = -1100; p.cds[1] = 0.8; this.ev({ k: 'slamgo', id: p.id }); return; } // ground slam from the air
       p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
-      const c = p.combo; p.swing = 0.25; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
+      const c = p.combo; p.swing = 0.16; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
       for (const o of this.players.values()) {
         if (o === p || !o.alive || dist(o, p) > T.reach + 25 || Math.abs(o.h - p.h) > 110 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
         if (o.block > 0 && this.front(o, p.x, p.y)) { o.en = Math.max(0, o.en - 15); p.kbx -= dx * 420; p.kby -= dy * 420; this.ev({ k: 'blocked', x: o.x, y: o.y }); continue; }
@@ -251,7 +251,7 @@ class Room {
       if (p.bot) this.botThink(p, dt);
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
-      p.heat = Math.max(0, p.heat - (p.over ? 45 : 32) * dt); if (p.over && p.heat <= 0) p.over = 0;
+      p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt); // blaster cools ~2x faster if (p.over && p.heat <= 0) p.over = 0;
       if (this.time - p.lastHit > REGEN_DELAY) p.hp = Math.min(HP, p.hp + REGEN * dt);
       for (let i = 0; i < 3; i++) p.cds[i] = Math.max(0, p.cds[i] - dt);
       const inp = p.input; p.a = Number.isFinite(+inp.a) ? +inp.a : 0; p.tool = clamp(inp.tool | 0, 0, 2);
@@ -292,7 +292,7 @@ class Room {
           b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.owner = p.id; b.life = 1; b.x += Math.cos(a) * 30; b.y += Math.sin(a) * 30; p.en = Math.max(0, p.en - 8);
           this.ev({ k: 'deflect', x: b.x, y: b.y, id: p.id }); break;
         }
-        if (this.damage(p, this.players.get(b.owner), b.dmg || 34, 'blaster', b.vx * 0.2, b.vy * 0.2)) { dead = true; break; }
+        if (this.damage(p, this.players.get(b.owner), b.dmg || TOOLS[0].dmg, 'blaster', b.vx * 0.2, b.vy * 0.2)) { dead = true; break; }
       }
       if (dead) this.bullets.splice(i, 1);
     }

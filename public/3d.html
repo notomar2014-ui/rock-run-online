@@ -113,7 +113,7 @@ body.host #feed{top:330px}body.host #qban{width:min(1150px,66vw);top:auto;bottom
 </style></head><body>
 <canvas id="g"></canvas><canvas id="c"></canvas>
 
-<div id="hud"><div id="vig"></div><div id="xh"></div><div id="hm"></div><div id="lockp" class="pnl">🖱️ Click to lock the mouse and look around · <b>Esc</b> to unlock</div><div id="me" class="pnl disp"><div class="r" id="meName"></div><div class="s" id="meScore">0</div><div class="r" id="meRank"></div><div id="hpw" title="Health: 3 blaster hits = KO. Heals after 4 s without getting hit"><i id="hpb"></i></div></div>
+<div id="hud"><div id="vig"></div><div id="xh"></div><div id="hm"></div><div id="lockp" class="pnl">🖱️ Hold <b>right mouse</b> and drag to look around · scroll to zoom</div><div id="me" class="pnl disp"><div class="r" id="meName"></div><div class="s" id="meScore">0</div><div class="r" id="meRank"></div><div id="hpw" title="Health: 3 blaster hits = KO. Heals after 4 s without getting hit"><i id="hpb"></i></div></div>
 <div id="clock" class="pnl disp"><div class="t" id="clockT">6:00</div><div class="n" id="clockN"></div></div>
 <div id="lb" class="pnl"></div><div id="feed"></div>
 <div id="qban" class="pnl"><div class="h disp" id="qbH"></div><div class="q disp" id="qbQ"></div><div class="ops" id="qbO"></div><div class="bar"><b id="qbB"></b></div></div><div id="qres" class="disp"></div>
@@ -164,8 +164,8 @@ const WNAME={pebble:'Pebble Blaster',cannon:'Meteor Cannon',laser:'Comet Tail La
 const TOOLI=['🔫','👊','🛡️'],TOOLN=['Blaster','Punch','Shield'],ACOL=['#ff6b6b','#4dabf7','#ffd43b','#69db7c'],ALET=['A','B','C','D'];
 const WCOL={cannon:'#ff8a3d',laser:'#66e3ff',crater:'#ffd43b',gbomb:'#b197fc',shield:'#8ce99a'};
 const HOW_OLD=[['🕹️','Move','<kbd>W A S D</kbd> or arrows<br>Phone: joystick'],['🎯','Aim + shoot','Mouse to aim, <kbd>click</kbd> or <kbd>Space</kbd><br>Phone: FIRE auto-aims'],['❓','Answer','Questions pop up for everyone. <kbd>1</kbd>–<kbd>4</kbd> or tap. Fast + right = big points'],['🏆','Win','One hit = BONK! Most points at the end wins']];
-const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · <kbd>right-drag</kbd> or click to look · scroll zoom<br><kbd>Space</kbd> jump (×2!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> dodge dash'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to pick<br><kbd>Left click</kbd> to use · aim with the crosshair'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one! Wrong = minus points'],['🏆','Win','Right answers = +300! Knock someone out (3 hits) = +50. Most points wins']];
-const WL=[['🔫','1 · Blaster','glowing shots · 3 hits = KO · don\'t overheat!'],['👊','2 · Punch','click 3× for a combo · punch in the air = SLAM'],['🛡️','3 · Shield','hold to block from the front · bounces shots back']];
+const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · hold <kbd>right mouse</kbd> + drag to look · <kbd>←</kbd><kbd>→</kbd> turn · scroll zoom<br><kbd>Space</kbd> jump (×2!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> dodge dash'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> to pick<br><kbd>Left click</kbd> to use · aim with the crosshair'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one! Wrong = minus points'],['🏆','Win','Right answers = +300! Knock someone out (3 hits) = +50. Most points wins']];
+const WL=[['🔫','1 · Blaster','fast glowing shots · 4 hits = KO · don\'t overheat!'],['👊','2 · Punch','click 3× for a combo · punch in the air = SLAM'],['🛡️','3 · Shield','hold to block from the front · bounces shots back']];
 const WL_OLD=[['🪨','Pebble Blaster','always on, one hit KO'],['🔥','Meteor Cannon','huge, smashes through rocks'],['💫','Comet Tail Laser','instant beam across the map'],['💥','Vesta Crater Blast','shockwave around you'],['🌀','Gravity Bomb','sucks everyone in, then pops'],['🛡️','Shield','blocks one hit · 💎 crystal = bonus question']];
 function fillHow(){$('#how1').innerHTML=HOW.map(h=>`<div><b>${h[0]}</b><div class="disp">${h[1]}</div>${h[2]}</div>`).join('');$('#wl1').innerHTML=WL.map(w=>`<div><span>${w[0]}</span><div><b>${w[1]}</b><br><small>${w[2]}</small></div></div>`).join('')}
 fillHow();if(IS_HOST)document.body.classList.add('host');
@@ -287,7 +287,7 @@ addEventListener('keydown',e=>{if(e.code==='KeyQ'&&!e.repeat&&!typing(e))qReq=pe
 function selTool(t){myTool=t;$$('#hotbar .slot[data-t]').forEach(e=>e.classList.toggle('sel',+e.dataset.t===t))}
 $$('#hotbar .slot[data-t]').forEach(e=>{e.addEventListener('mousedown',ev=>{ev.stopPropagation();selTool(+e.dataset.t)});e.addEventListener('touchstart',ev=>{ac();selTool(+e.dataset.t);fireTouch=true;ev.preventDefault()},{passive:false});e.addEventListener('touchend',()=>fireTouch=false)});
 addEventListener('keydown',e=>{if(typing(e))return;if(/^Digit[123]$/.test(e.code))selTool(+e.code.slice(5)-1);if(e.code==='Space'&&!e.repeat)dashReq=performance.now()});
-addEventListener('wheel',e=>{if(phase==='play'&&!IS_HOST)camZoom=clamp(camZoom*(e.deltaY>0?1.12:1/1.12),.45,2.6)},{passive:true}); // scroll = zoom, like Roblox
+addEventListener('wheel',e=>{if(phase==='play'&&!IS_HOST)zoomT=clamp((zoomT||5)*(e.deltaY>0?1.15:1/1.15),1.2,14)},{passive:true}); // scroll = zoom, like Roblox
 function touchUI(on){$('#touch').classList.toggle('on',on)}
 $('#joy').addEventListener('touchstart',e=>{const t=e.changedTouches[0],r=$('#joy').getBoundingClientRect();joy.id=t.identifier;joy.x=r.left+r.width/2;joy.y=r.top+r.height/2;moveJoy(t);e.preventDefault()},{passive:false});
 addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===joy.id)moveJoy(t)},{passive:false});
@@ -295,27 +295,29 @@ addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier=
 function moveJoy(t){let dx=t.clientX-joy.x,dy=t.clientY-joy.y;const l=Math.hypot(dx,dy),m=55;if(l>m){dx*=m/l;dy*=m/l}joy.dx=dx/m;joy.dy=dy/m;$('#joy i').style.transform=`translate(${dx}px,${dy}px)`}
 $('#tdash').addEventListener('touchstart',e=>{ac();dashReq=performance.now();e.preventDefault()},{passive:false});$('#tq').addEventListener('touchstart',e=>{ac();qReq=performance.now();e.preventDefault()},{passive:false});
 // ---------------- input (3D: camera-relative, pointer lock) ----------------
-let lastSent='',lastSendT=0,myAim=0,yaw=0,pitch=.3,locked=false,lookTouch=null,camZoom=1,rDrag=false;
+let lastSent='',lastSendT=0,myAim=0,myFace=0,yaw=0,pitch=.35,locked=false,lookTouch=null,rDrag=false,zoomT=0,camD=0; // Roblox Classic camera: right-drag orbits, scroll zooms, no mouse lock
 function enemyAhead(me){if(!snap)return null;let best=null,bd=1e9;for(const p of snap.p){if(p[0]===myId||!(p[4]&1)||(p[4]&4))continue;const dx=p[1]-me.x,dy=p[2]-me.y,d=Math.hypot(dx,dy);if(d>700)continue;const da=Math.abs(Math.atan2(Math.sin(Math.atan2(dy,dx)-yaw),Math.cos(Math.atan2(dy,dx)-yaw)));if(da<1&&d<bd){bd=d;best=Math.atan2(dy,dx)}}return best}
 function sendInput(now){
  if(IS_HOST||phase!=='play'||!snap)return;const me=disp.get(myId);if(!me)return;
- let fw=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),st=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
+ let fw=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),st=(keys.KeyD?1:0)-(keys.KeyA?1:0); // arrows left/right turn the camera (Roblox)
  if(joy.id!==null){fw=-joy.dy;st=joy.dx}
  let mx=Math.cos(yaw)*fw-Math.sin(yaw)*st,my=Math.sin(yaw)*fw+Math.cos(yaw)*st;
  if(window.testMove){mx=testMove[0];my=testMove[1]}
- myAim=yaw;if(isTouch){const e=enemyAhead(me);if(e!==null)myAim=e}
- const f=(mouse.down||fireTouch||keys.Enter)?1:0,d=now-dashReq<200?1:0,sp=keys.ShiftLeft||keys.ShiftRight?1:0;
+ const f=(mouse.down||fireTouch||keys.Enter)?1:0;
+ // the character turns to face where it walks; using a tool turns it to face the crosshair (camera direction)
+ if(Math.hypot(mx,my)>.1)myFace=Math.atan2(my,mx);if(f||(myTool===2&&mouse.down)){myFace=yaw;if(isTouch){const e=enemyAhead(me);if(e!==null)myFace=e}}myAim=myFace;
+ const d=now-dashReq<200?1:0,sp=keys.ShiftLeft||keys.ShiftRight?1:0;
  if(!Number.isFinite(mx+my+myAim)){mx=my=0;myAim=0}const q=now-qReq<200?1:0;
  const msg={t:'in',mx:+mx.toFixed(2),my:+my.toFixed(2),a:+myAim.toFixed(2),f,tool:myTool,d,s:sp,q},s=JSON.stringify(msg);
  if(s!==lastSent||now-lastSendT>250){send(msg);lastSent=s;lastSendT=now}
 }
-cv.addEventListener('click',()=>{if(phase==='play'&&!IS_HOST&&!isTouch&&!locked){try{const r=cv.requestPointerLock?.();r&&r.catch&&r.catch(()=>{})}catch(e){}}});
+
 document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===cv});
-cv.addEventListener('contextmenu',e=>e.preventDefault());cv.addEventListener('mousedown',e=>{if(e.button===2&&phase==='play'&&!IS_HOST){rDrag=true;e.preventDefault()}});addEventListener('mouseup',e=>{if(e.button===2)rDrag=false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());cv.addEventListener('mousedown',e=>{if(e.button===2&&phase==='play'&&!IS_HOST){rDrag=true;window.rdUsed=true;e.preventDefault()}});addEventListener('mouseup',e=>{if(e.button===2)rDrag=false});
 // Roblox-style look: hold RIGHT mouse and drag to orbit, or click once to lock the mouse (Esc to free it)
-document.addEventListener('mousemove',e=>{if(!locked&&!rDrag)return;yaw+=e.movementX*.0026;pitch=clamp(pitch+e.movementY*.002,-.2,1.05)});
+document.addEventListener('mousemove',e=>{if(!locked&&!rDrag)return;yaw+=e.movementX*.004;pitch=clamp(pitch+e.movementY*.003,-1.2,1.4)});
 addEventListener('touchstart',e=>{for(const t of e.changedTouches)if(t.clientX>innerWidth*.45&&t.target===cv&&!lookTouch)lookTouch={id:t.identifier,x:t.clientX,y:t.clientY}},{passive:true});
-addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(lookTouch&&t.identifier===lookTouch.id){yaw+=(t.clientX-lookTouch.x)*.006;pitch=clamp(pitch+(t.clientY-lookTouch.y)*.004,-.2,1.05);lookTouch.x=t.clientX;lookTouch.y=t.clientY}},{passive:true});
+addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(lookTouch&&t.identifier===lookTouch.id){yaw+=(t.clientX-lookTouch.x)*.006;pitch=clamp(pitch+(t.clientY-lookTouch.y)*.005,-1.2,1.4);lookTouch.x=t.clientX;lookTouch.y=t.clientY}},{passive:true});
 addEventListener('touchend',e=>{for(const t of e.changedTouches)if(lookTouch&&t.identifier===lookTouch.id)lookTouch=null});
 
 // ---------------- rendering: 2D overlay (#c) + three.js world (#g) ----------------
@@ -446,7 +448,7 @@ function syncWorld(now,dt){
  for(const[k,m]of G3.rocks)if(!seen.has(k)){scene.remove(m);G3.rocks.delete(k)}
  if(snap)for(const p of snap.p){const r=roster.get(p[0]),d=disp.get(p[0]);if(!r||!d)continue;let a=G3.astros.get(p[0]);if(!a){a=makeAstro(new T.Color(r.color));G3.astros.set(p[0],a)}
   const on=!!(p[4]&1);a.g.visible=on;a.shadowDisk.visible=on;if(!on)continue;
-  a.g.position.copy(W3(d.x,d.y,d.h));a.flashT=Math.max(0,(a.flashT||0)-dt);a.g.scale.setScalar(1+a.flashT*.9);if((p[18]&2)&&Math.random()<.6)burst(d.x,d.y,'#d0bfff',1,40,.3,3,50);const ang=(p[0]===myId&&!IS_HOST)?yaw:d.a;a.g.rotation.y=Math.PI/2-ang;a.shadowDisk.position.set(a.g.position.x,.03,a.g.position.z);a.shadowDisk.scale.setScalar(1/(1+d.h*S*.5));
+  a.g.position.copy(W3(d.x,d.y,d.h));a.flashT=Math.max(0,(a.flashT||0)-dt);a.g.scale.setScalar(1+a.flashT*.9);if((p[18]&2)&&Math.random()<.6)burst(d.x,d.y,'#d0bfff',1,40,.3,3,50);const ang=(p[0]===myId&&!IS_HOST)?myFace:d.a;a.g.rotation.y=Math.PI/2-ang;a.shadowDisk.position.set(a.g.position.x,.03,a.g.position.z);a.shadowDisk.scale.setScalar(1/(1+d.h*S*.5));
   const spd=Math.hypot(p[6],p[7]),air=d.h>4;a.phase+=dt*14*Math.min(1.3,spd/300);const sw=air?0:Math.min(1.25,spd/300)*.9*Math.sin(a.phase);
   a.legL.rotation.x=air?-.5:sw;a.legR.rotation.x=air?.3:-sw;a.armL.rotation.x=air?-2.4:-sw*.8;
   const tool=(p[0]===myId&&!IS_HOST)?myTool:p[5];a.gun.visible=tool===0;
@@ -489,11 +491,13 @@ function placeCamera(now,dt){const T=THREEr,t=now/1000;
  const me=disp.get(myId);
  if(IS_HOST&&phase==='play'&&snap){hostCam(dt);return}
  if(IS_HOST||!me||phase!=='play'){const a=t*.04;camera.position.set(Math.sin(a)*4,40,36+Math.cos(a)*2);camera.lookAt(0,0,2.5);return}
- const tg=W3(me.x,me.y,me.h);tg.y+=1.55;const ld=new T.Vector3(Math.cos(yaw)*Math.cos(pitch),-Math.sin(pitch),Math.sin(yaw)*Math.cos(pitch)),rt=new T.Vector3(-Math.sin(yaw),0,Math.cos(yaw));
- let D=((isTouch&&VW<600)?6.6:5.6)*camZoom;{const cx=tg.x-rt.x*0+0,st=.2;for(let u=.8;u<=D;u+=st){const px=tg.x+rt.x*.4*u/D-ld.x*u,pz=tg.z+rt.z*.4*u/D-ld.z*u,py=tg.y-ld.y*u+.35*u/4.6;let hit=py<gh(px,pz)+.7;if(snap&&!hit)for(const r of snap.r){const rr=r[3]*S,dx=px-(r[1]-cfg.W/2)*S,dz=pz-(r[2]-cfg.H/2)*S;if(dx*dx+dz*dz<(rr+.35)*(rr+.35)&&py<rr*1.25){hit=true;break}}if(hit){D=Math.max(1.2,u-.4);break}}}
- const want=tg.clone().addScaledVector(rt,.4).addScaledVector(ld,-D);want.y+=.35;want.y=Math.max(want.y,gh(want.x,want.z)+1.1);
- camera.position.lerp(want,Math.min(1,dt*8));camera.position.y=Math.max(camera.position.y,gh(camera.position.x,camera.position.z)+1);const fv=(keys.ShiftLeft||keys.ShiftRight)&&me.p&&Math.hypot(me.p[6],me.p[7])>200?76:68;if(Math.abs(camera.fov-fv)>.05){camera.fov+=(fv-camera.fov)*Math.min(1,dt*5);camera.updateProjectionMatrix()}if(shake>0){camera.position.x+=rnd(-1,1)*shake*.4;camera.position.y+=rnd(-1,1)*shake*.4}
- camera.lookAt(camera.position.clone().add(ld))}
+ yaw+=((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*2.4*dt; // Roblox: arrow keys turn the camera
+ if(!zoomT)zoomT=(isTouch&&VW<600)?5.6:4.8;if(!camD)camD=zoomT;camD+=(zoomT-camD)*Math.min(1,dt*12); // ~12 studs default, smooth scroll zoom
+ const tg=W3(me.x,me.y,me.h);tg.y+=1.6;const ld=new T.Vector3(Math.cos(yaw)*Math.cos(pitch),-Math.sin(pitch),Math.sin(yaw)*Math.cos(pitch));
+ let D=camD;for(let u=.4;u<=camD;u+=.15){const px=tg.x-ld.x*u,py=tg.y-ld.y*u,pz=tg.z-ld.z*u;let hit=py<gh(px,pz)+.35;if(snap&&!hit)for(const r of snap.r){const rr=r[3]*S,dx=px-(r[1]-cfg.W/2)*S,dz=pz-(r[2]-cfg.H/2)*S;if(dx*dx+dz*dz<(rr+.3)*(rr+.3)&&py<rr*1.25){hit=true;break}}if(hit){D=Math.max(.6,u-.3);break}} // pull in if terrain/rocks block
+ camera.position.copy(tg).addScaledVector(ld,-D);if(camera.fov!==70){camera.fov=70;camera.updateProjectionMatrix()}
+ if(shake>0){camera.position.x+=rnd(-1,1)*shake*.4;camera.position.y+=rnd(-1,1)*shake*.4}
+ camera.lookAt(tg)}
 let hcF=null,hcD=26;
 function hostCam(dt){const T=THREEr;// cinematic follow: frame the action (players + landed answers), lean toward the leader
  let sx=0,sz=0,n=0,minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;const add=(x,z,w)=>{sx+=x*w;sz+=z*w;n+=w;minX=Math.min(minX,x);maxX=Math.max(maxX,x);minZ=Math.min(minZ,z);maxZ=Math.max(maxZ,z)};
@@ -518,7 +522,7 @@ function frame(now){
  else{const bg=ctx.createLinearGradient(0,0,0,VH);bg.addColorStop(0,'#0b0720');bg.addColorStop(1,'#050310');ctx.fillStyle=bg;ctx.fillRect(0,0,VW,VH);const t=now/1000;for(const s of stars2){ctx.globalAlpha=.4+.4*Math.sin(t*2+s.tw);ctx.fillStyle='#fff';ctx.fillRect((s.x*VW+t*5)%VW,s.y*VH,s.s,s.s)}ctx.globalAlpha=1;
   if(phase!=='end')for(let i=0;i<4;i++){const a=t*.15+i*1.6,x=VW/2+Math.cos(a)*VW*.4,y=VH/2+Math.sin(a*1.3)*VH*.34;ctx.save();ctx.globalAlpha=.5;ctx.translate(x,y);ctx.rotate(Math.sin(t+i)*.4);ctx.scale(1.4,1.4);drawShip(ctx,COLORS[i*2%8],0,t);ctx.restore()}}
  sendInput(now);
- $('#lockp').style.display=phase==='play'&&!IS_HOST&&!isTouch&&!locked&&R3&&$('#dead').style.display!=='block'?'block':'none';$('#xh').style.display=phase==='play'&&!IS_HOST?'block':'none';
+ $('#lockp').style.display=phase==='play'&&!IS_HOST&&!isTouch&&!window.rdUsed&&R3&&$('#dead').style.display!=='block'?'block':'none';$('#xh').style.display=phase==='play'&&!IS_HOST?'block':'none';
  if(confetti.length&&phase==='end'){for(const c of confetti){c.y+=c.vy*dt;c.x+=c.vx*dt;c.r+=dt*4;if(c.y>VH+10){c.y=-10;c.x=rnd(0,VW)}ctx.save();ctx.translate(c.x,c.y);ctx.rotate(c.r);ctx.fillStyle=c.c;ctx.fillRect(-4,-7,8,14);ctx.restore()}}
 }
 function tag(x,y,txt,c,fs,bg){ctx.font=`900 ${fs}px "Segoe UI",system-ui`;ctx.textAlign='center';const w=ctx.measureText(txt).width+14;ctx.fillStyle=bg||'rgba(8,6,24,.6)';ctx.beginPath();ctx.roundRect(x-w/2,y-fs-2,w,fs+8,7);ctx.fill();ctx.fillStyle=c;ctx.fillText(txt,x,y+1)}
@@ -553,7 +557,7 @@ function hud(now){
  const qs=snap.qs,ql=snap.ql;$('#clockN').textContent=L<=15?'🏁 Final seconds! Most points wins':qs==='question'?'❓ Run into the right answer meteor!':qs==='reveal'?'✅ Answer revealed':ql<L?`⚔️ Fight! Next question in ${ql}s`:'⚔️ Fight! Most points wins';
  if(curQ&&curQ.end){$('#qbB').style.width=clamp((curQ.end-now)/1000/curQ.time*100,0,100)+'%'}else $('#qbB').style.width='0%';
  if(IS_HOST)return;const mp=snap.p.find(p=>p[0]===myId);if(!mp)return;
- const slots=$$('#hotbar .slot');slots[0].querySelector('.cd').style.setProperty('--p',(mp[18]&1?100:mp[9]/.3*100)+'%');slots[1].querySelector('.cd').style.setProperty('--p',(mp[10]/.8*100)+'%');slots[2].querySelector('.cd').style.setProperty('--p',((mp[16]??100)<12?100:0)+'%');
+ const slots=$$('#hotbar .slot');slots[0].querySelector('.cd').style.setProperty('--p',(mp[18]&1?100:mp[9]/.15*100)+'%');slots[1].querySelector('.cd').style.setProperty('--p',(mp[10]/.18*100)+'%');slots[2].querySelector('.cd').style.setProperty('--p',((mp[16]??100)<12?100:0)+'%');
  const m0=slots[0].querySelector('.mt'),m2=slots[2].querySelector('.mt');m0.style.display=m2.style.display='block';const heat=mp[15]||0;m0.firstChild.style.setProperty('--w',(100-heat)+'%');m0.firstChild.style.setProperty('--c',mp[18]&1?'#ff6b6b':heat>60?'#ffa94d':'#ffd43b');slots[0].classList.toggle('hot',!!(mp[18]&1));
  m2.firstChild.style.setProperty('--w',(mp[16]??100)+'%');m2.firstChild.style.setProperty('--c',(mp[16]??100)<12?'#868e96':'#74c0fc');$('#qSlot .cd').style.setProperty('--p',((mp[17]||0)/2.2*100)+'%');
  const hp=mp[4]&1?(mp[14]??100):0;$('#hpb').style.width=hp+'%';$('#hpb').style.background=hp>60?'':hp>30?'#fcc419':'#ff6b6b';
