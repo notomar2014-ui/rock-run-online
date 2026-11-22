@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r6d';
+const BUILD = 'r6e';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -47,12 +47,12 @@ function floorAt(x, y) {
 function worldCfg() { return { W, H, plats: PLATS, pillars: PILLARS, occator: OCCATOR }; }
 const Q_TIME = 25, REVEAL_TIME = 4, BREAK_TIME = 15, FIRST_BREAK = FAST ? 5 : 10;
 const PTS_RIGHT = 200, PTS_WRONG = 50, PTS_KO = 100, PTS_DIE = 50, PTS_METEOR = 50; // Omar: +200 right, +100 KO, -50 wrong / meteor / death (never below 0)
-const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.2, DASH_V = 900, IFRAME = 0.3;
+const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.55, DASH_V = 1480, DASH_UP = 640, IFRAME = 0.34;
 const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.16, speed: 2260, life: 1.15, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +22% speed, much longer range; 2 hits = KO
+  { name: 'Blaster', cd: 0.16, speed: 3180, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +41% vs r6d 2260; range ~2700 stays sensible; 2 hits = KO
   { name: 'Punch', cd: 0.18, reach: 143, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7 }, // 3-hit KO; reach +30%; air slam is a 1-hit KO
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
@@ -71,6 +71,7 @@ const BOT_NAMES = ['Bot Ceres', 'Bot Vesta', 'Bot Pallas', 'Bot Juno', 'Bot Hygi
 
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const closestDist = (x0, y0, x1, y1, px, py) => { const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy; const t = l2 <= 1e-8 ? 0 : Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / l2)); return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t)); };
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function vestaRadius(th) {
   let r = VESTA.r * (1 + 0.16 * Math.sin(3 * th + 1.1) + 0.09 * Math.sin(5 * th + 0.4) + 0.05 * Math.sin(8 * th + 2));
@@ -316,9 +317,18 @@ class Room {
       let mx = +inp.mx || 0, my = +inp.my || 0; const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
       // snappy Roblox-style movement: velocity eases to target quickly (little drift)
       const sp = (inp.sprint && !shielding ? SPRINT : SPEED) * (shielding ? 0.5 : 1), k = Math.min(1, dt * 11);
-      if (inp.q && !p.qPrev && p.dashCd <= 0) { // dodge dash with i-frames
+      if (inp.q && !p.qPrev && p.dashCd <= 0) { // dodge dash: further launch, look-up or mid-air goes up (same Q key)
         let ddx = mx, ddy = my; if (!Math.hypot(ddx, ddy)) { ddx = Math.cos(p.a); ddy = Math.sin(p.a); } const dl = Math.hypot(ddx, ddy) || 1;
-        p.kbx += ddx / dl * DASH_V; p.kby += ddy / dl * DASH_V; p.iframe = IFRAME; p.dashCd = DASH_CD; this.ev({ k: 'dash', id: p.id, x: p.x, y: p.y });
+        ddx /= dl; ddy /= dl;
+        const pit = Number.isFinite(+inp.p) ? Math.max(-1.5, Math.min(1.5, +inp.p)) : 0; // negative pitch = look up
+        const flD = floorAt(p.x, p.y), grounded = p.h <= flD + 0.6, lookUp = pit < -0.16, lookDown = pit > 0.28;
+        let horiz = DASH_V, up = 160;
+        if (lookUp || (!grounded && !lookDown)) {
+          const t = lookUp ? Math.max(0.28, Math.min(1, -pit / 1.15)) : 0.42;
+          up = DASH_UP * t; horiz = DASH_V * (lookUp ? Math.max(0.38, Math.cos(Math.min(1.2, -pit))) : 0.9);
+        } else if (!grounded && lookDown) { up = -DASH_UP * Math.max(0.25, Math.min(1, pit / 1.2)); horiz = DASH_V * 0.85; }
+        p.kbx += ddx * horiz; p.kby += ddy * horiz; p.vh += up; if (up > 0 && p.h <= flD + 0.6) p.h = flD + 1;
+        p.iframe = IFRAME; p.dashCd = DASH_CD; this.ev({ k: 'dash', id: p.id, x: p.x, y: p.y });
       }
       p.qPrev = inp.q ? 1 : 0;
       p.vx += (mx * sp - p.vx) * k; p.vy += (my * sp - p.vy) * k;
@@ -340,9 +350,9 @@ class Room {
       if (q.stage === 'question' && !q.picks.has(p.id)) for (const a of q.ans) if (a.landed && Math.hypot(p.x - a.x, p.y - a.y) < a.r + 18) { this.grab(p, a); break; }
     }
     for (let i = this.bullets.length - 1; i >= 0; i--) {
-      const b = this.bullets[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; let dead = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > W || b.y > H;
-      if (!dead) for (const r of this.rocks) if (dist(b, r) < r.r + b.r && b.h < r.r * 1.6) { r.hp--; r.vx += b.vx * 0.03; r.vy += b.vy * 0.03; this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
-      if (!dead) for (const r of PILLARS) if (dist(b, r) < r.r + b.r && b.h < r.h) { this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
+      const b = this.bullets[i], ox = b.x, oy = b.y; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; let dead = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > W || b.y > H;
+      if (!dead) for (const r of this.rocks) if (closestDist(ox, oy, b.x, b.y, r.x, r.y) < r.r + b.r && b.h < r.r * 1.6) { r.hp--; r.vx += b.vx * 0.03; r.vy += b.vy * 0.03; this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
+      if (!dead) for (const r of PILLARS) if (closestDist(ox, oy, b.x, b.y, r.x, r.y) < r.r + b.r && b.h < r.h) { this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
       // light aim-assist: gentle magnetism toward a nearby enemy already close to the shot line (trackpad-friendly, still has to aim)
       if (!dead) {
         const spd = Math.hypot(b.vx, b.vy) || 1;
@@ -360,7 +370,7 @@ class Room {
         }
       }
       // generously sized (~1.25x) player hit radius, trackpad-friendly but not oversized
-      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 40 + b.r && Math.abs(p.h + 50 - b.h) < 106) {
+      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && closestDist(ox, oy, b.x, b.y, p.x, p.y) < 40 + b.r && Math.abs(p.h + 50 - b.h) < 106) {
         if (p.block > 0 && this.front(p, p.x - b.vx, p.y - b.vy)) { // deflect it back toward the shooter
           const o = this.players.get(b.owner), sp = Math.hypot(b.vx, b.vy) * 1.1; let a = Math.atan2(-b.vy, -b.vx); if (o && o.alive) a = Math.atan2(o.y - b.y, o.x - b.x);
           b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.owner = p.id; b.life = 1; b.x += Math.cos(a) * 30; b.y += Math.sin(a) * 30; p.en = Math.max(0, p.en - 8);
@@ -490,7 +500,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0; }
+    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; i.p = Math.max(-1.5, Math.min(1.5, +m.p || 0)); if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0; }
   });
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });
