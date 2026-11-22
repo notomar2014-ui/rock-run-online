@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r6e';
+const BUILD = 'r7';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -297,10 +297,10 @@ class Room {
     for (const a of q.ans) { a.x += a.vx * dt; a.y += a.vy * dt; if (a.x < 120 || a.x > W - 120) a.vx *= -1; if (a.y < 120 || a.y > H - 120) a.vy *= -1; }
     const ps = [...this.players.values()];
     for (const p of ps) {
-      if (!p.bot && !p.connected) { if (p.alive) { p.savedHp = p.hp; p.alive = false; p.slam = 0; p.dropAt = p.dropAt || Date.now(); } p.respawnAt = this.time + 9999; continue; } // hide so they aren't a free target; resume restores them
+      if (!p.bot && !p.connected) { if (p.alive) { p.savedHp = p.hp; p.alive = false; p.slam = 0; } p.dropAt = p.dropAt || Date.now(); p.respawnAt = this.time + 9999; continue; } // hide so they aren't a free target; resume restores them
       if (p.bot) this.botThink(p, dt);
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
-      if (!p.bot && Date.now() - (p.inAt || 0) > 600) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 0.6 s (tab hidden, lost keyup, dropped link) = stand still
+      if (!p.bot && Date.now() - (p.inAt || 0) > 1000) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 1 s (tab hidden, lost keyup, dropped link) = stand still
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
       p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt);
       p.slamCd = Math.max(0, (p.slamCd || 0) - dt);
@@ -347,6 +347,16 @@ class Room {
       if (!Number.isFinite(p.x + p.y + p.h + p.vh + p.vx + p.vy + p.kbx + p.kby)) { this.respawn(p); continue; } // never let a NaN escape
       for (const r of this.rocks) { const d = dist(p, r), m = r.r + 18; if (d < m && d > 0 && p.h < r.r * 1.2) { const nx = (p.x - r.x) / d, ny = (p.y - r.y) / d; p.x = r.x + nx * m; p.y = r.y + ny * m; r.vx -= nx * 20; r.vy -= ny * 20; } }
       for (const r of PILLARS) { const d = dist(p, r), m = r.r + 18; if (d < m && d > 0 && p.h < r.h) { const nx = (p.x - r.x) / d, ny = (p.y - r.y) / d; p.x = r.x + nx * m; p.y = r.y + ny * m; } }
+      // Adopt a recent client pose if it is within generous sprint+dash (incl. upward) bounds of the simulated position. Huge teleports are ignored.
+      if (!p.bot && p.clientPose && (Date.now() - p.clientPose.at) < 450) {
+        const c = p.clientPose, dd = Math.hypot(c.x - p.x, c.y - p.y), dh = Math.abs((c.h || 0) - p.h);
+        const slack = (SPRINT + DASH_V) * ((c.dtIn || 0.1) + 0.35) + 320;
+        const vslack = (DASH_UP + JUMP_V) * ((c.dtIn || 0.1) + 0.35) + 240;
+        if (dd <= Math.max(550, slack) && dh <= Math.max(400, vslack)) {
+          p.x = c.x; p.y = c.y; p.h = c.h;
+          if (Number.isFinite(c.vx)) p.vx = c.vx; if (Number.isFinite(c.vy)) p.vy = c.vy; if (Number.isFinite(c.vh)) p.vh = c.vh;
+        }
+      }
       if (q.stage === 'question' && !q.picks.has(p.id)) for (const a of q.ans) if (a.landed && Math.hypot(p.x - a.x, p.y - a.y) < a.r + 18) { this.grab(p, a); break; }
     }
     for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -403,7 +413,7 @@ class Room {
     const movingRock = this.rocks.some(r => Math.abs(r.vx) + Math.abs(r.vy) > 2);
     const sendRocks = this.rockDirty || movingRock || !this.rockSnap || this.tickN % (SNAP_EVERY * 10) === 0;
     if (sendRocks) { this.rockSnap = this.rocks.map(r => [r.id, R(r.x), R(r.y), R(r.r), r1(r.rot)]); this.rockDirty = false; }
-    const s = { t: 's', n: this.tickN, left: Math.max(0, R(this.duration - this.time)), qs: q.stage, ql: Math.max(0, R(q.until - this.time)), qn: q.n,
+    const s = { t: 's', n: this.tickN, ts: Date.now(), left: Math.max(0, R(this.duration - this.time)), qs: q.stage, ql: Math.max(0, R(q.until - this.time)), qn: q.n,
       p: [...this.players.values()].map(p => [p.id, R(p.x), R(p.y), R(p.a * 100) / 100, (p.alive ? 1 : 0) | (p.block > 0 ? 2 : 0) | (p.inv > 0 ? 4 : 0) | (q.picks.has(p.id) ? 16 : 0) | (p.swing > 0 ? 32 : 0),
         p.tool, R(p.vx), R(p.vy), R(p.respawnAt - this.time), r1(p.cds[0]), r1(p.cds[1]), r1(p.cds[2]), p.jumps, R(p.h),
         R(p.hp), p.ammo | 0, R(p.en), r1(p.dashCd), (p.reloading > 0 ? 1 : 0) | (p.iframe > 0 ? 2 : 0) | (p.slam ? 4 : 0), p.combo,
@@ -478,7 +488,7 @@ wss.on('connection', (ws) => {
       if (!r) return room === null && ws.send(JSON.stringify({ t: 'error', code: 'no_room', text: 'No game with that code. Check the code on the big screen. If it changed, the host may have started a new game.' }));
       room = r; room.lastActive = Date.now();
       let p = [...room.players.values()].find(x => x.token && x.token === m.token);
-      if (p) { p.ws = ws; p.connected = true; if (p.dropAt && Date.now() - p.dropAt < 75e3) { p.alive = true; if (p.savedHp != null) p.hp = p.savedHp; p.respawnAt = 0; } p.dropAt = 0; }
+      if (p) { p.ws = ws; p.connected = true; if (!p.dropAt || Date.now() - p.dropAt < 75e3) { if (p.savedHp != null) { p.alive = true; p.hp = p.savedHp; p.respawnAt = 0; } else if (!p.alive) { p.respawnAt = Math.min(p.respawnAt || 0, room.time + 0.15); } } p.dropAt = 0; p.savedHp = null; }
       else {
         if (room.players.size >= MAX_PLAYERS) return ws.send(JSON.stringify({ t: 'error', code: 'full', text: 'This game is full.' }));
         const base = clean(m.name) || 'Explorer'; let name = base; for (let k = 2; [...room.players.values()].some(x => x.name === name); k++) name = base.slice(0, 14 - String(k).length) + k;
@@ -500,7 +510,14 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; i.p = Math.max(-1.5, Math.min(1.5, +m.p || 0)); if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0; }
+    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; i.p = Math.max(-1.5, Math.min(1.5, +m.p || 0)); if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0;
+      // Client pose: trusted only if it could be reached with sprint + dash (incl. upward). Used after the physics step so we don't double-move.
+      if (Number.isFinite(+m.x) && Number.isFinite(+m.y)) {
+        const dtIn = Math.min(0.9, Math.max(0.05, (Date.now() - (me.poseAt || Date.now() - 80)) / 1000));
+        me.poseAt = Date.now();
+        me.clientPose = { x: +m.x, y: +m.y, h: Number.isFinite(+m.h) ? +m.h : me.h, vx: Number.isFinite(+m.vx) ? +m.vx : me.vx, vy: Number.isFinite(+m.vy) ? +m.vy : me.vy, vh: Number.isFinite(+m.vh) ? +m.vh : me.vh, at: Date.now(), dtIn };
+      }
+    }
   });
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });

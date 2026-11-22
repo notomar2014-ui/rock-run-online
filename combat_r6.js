@@ -33,7 +33,7 @@ function toward(a, b) {
   await sleep(800);
   const h = client(); await h.open; h.send({ t: 'host', origin: 'http://x' });
   const hosted = await h.wait('hosted');
-  ok(hosted && /^r6/.test(hosted.build), 'host reports build r6x (' + (hosted && hosted.build) + ')');
+  ok(hosted && hosted.build === 'r7', 'host reports build r7 (' + (hosted && hosted.build) + ')');
   const code = hosted.code;
   const A = client(), B = client();
   await A.open; A.send({ t: 'join', code, name: 'Alpha' });
