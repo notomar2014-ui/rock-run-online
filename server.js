@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r6c';
+const BUILD = 'r6d';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -52,8 +52,8 @@ const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.16, speed: 1850, life: 0.55, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // 2 hits = KO; 10-round mag then reload
-  { name: 'Punch', cd: 0.18, reach: 110, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7 }, // 3-hit KO; air slam is a 1-hit KO with a long cooldown
+  { name: 'Blaster', cd: 0.16, speed: 2260, life: 1.15, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +22% speed, much longer range; 2 hits = KO
+  { name: 'Punch', cd: 0.18, reach: 143, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7 }, // 3-hit KO; reach +30%; air slam is a 1-hit KO
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
@@ -213,14 +213,15 @@ class Room {
       if (p.ammo <= 0) this.beginReload(p);
     } else if (t === 1) {
       p.inv = 0;
-      if (p.h > 70 && !p.slam) {
+      const flAir = floorAt(p.x, p.y);
+      if ((p.h > flAir + 8 || p.vh > 80) && !p.slam) {
         if ((p.slamCd || 0) > 0) return; // slam still cooling down
         p.slam = 1; p.vh = -1100; p.cds[1] = 0.8; p.slamCd = T.slamCd; this.ev({ k: 'slamgo', id: p.id }); return;
       }
       p.cds[1] = T.cd; p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
       const c = p.combo; p.swing = 0.16; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
       for (const o of this.players.values()) {
-        if (o === p || !o.alive || dist(o, p) > T.reach + 25 || Math.abs(o.h - p.h) > 110 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
+        if (o === p || !o.alive || dist(o, p) > T.reach + 32 || Math.abs(o.h - p.h) > 130 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
         if (o.block > 0 && this.front(o, p.x, p.y)) { o.en = Math.max(0, o.en - 15); p.kbx -= dx * 420; p.kby -= dy * 420; this.ev({ k: 'blocked', x: o.x, y: o.y }); continue; }
         const kb = 380 + c * 260; this.damage(o, p, T.dmg[c], 'punch', dx * kb, dy * kb, c === 2 ? 430 : 0);
       }
@@ -295,7 +296,7 @@ class Room {
     for (const a of q.ans) { a.x += a.vx * dt; a.y += a.vy * dt; if (a.x < 120 || a.x > W - 120) a.vx *= -1; if (a.y < 120 || a.y > H - 120) a.vy *= -1; }
     const ps = [...this.players.values()];
     for (const p of ps) {
-      if (!p.bot && !p.connected) { if (p.alive) { p.alive = false; p.slam = 0; } p.respawnAt = this.time; continue; } // gone: hide until they come back
+      if (!p.bot && !p.connected) { if (p.alive) { p.savedHp = p.hp; p.alive = false; p.slam = 0; p.dropAt = p.dropAt || Date.now(); } p.respawnAt = this.time + 9999; continue; } // hide so they aren't a free target; resume restores them
       if (p.bot) this.botThink(p, dt);
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
       if (!p.bot && Date.now() - (p.inAt || 0) > 600) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 0.6 s (tab hidden, lost keyup, dropped link) = stand still
@@ -328,7 +329,7 @@ class Room {
       p.jPrev = inp.dash ? 1 : 0;
       if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h += p.vh * dt; const fl2 = floorAt(p.x, p.y); if (p.h <= fl2 && p.vh <= 0) { p.h = fl2; p.vh = 0; } if (p.h < 0) { p.h = 0; p.vh = 0; } }
       if (p.slam && p.h <= floorAt(p.x, p.y) + 0.6) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
-        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 160) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
+        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 208) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
       if (inp.f) this.use(p);
       if (!p.seenWell.c && this.time > 4) { p.seenWell.c = 1; this.fact(p, pick(FACTS.ceres)); }
       p.x = clamp(p.x + (p.vx + p.kbx) * dt, 20, W - 20); p.y = clamp(p.y + (p.vy + p.kby) * dt, 20, H - 20);
@@ -342,8 +343,24 @@ class Room {
       const b = this.bullets[i]; b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; let dead = b.life <= 0 || b.x < 0 || b.y < 0 || b.x > W || b.y > H;
       if (!dead) for (const r of this.rocks) if (dist(b, r) < r.r + b.r && b.h < r.r * 1.6) { r.hp--; r.vx += b.vx * 0.03; r.vy += b.vy * 0.03; this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
       if (!dead) for (const r of PILLARS) if (dist(b, r) < r.r + b.r && b.h < r.h) { this.ev({ k: 'spark', x: b.x, y: b.y }); dead = true; break; }
-      // generous hitbox (+ a little extra) so hits feel fair at 15 Hz snapshots with interpolation
-      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 32 + b.r && Math.abs(p.h + 50 - b.h) < 85) {
+      // light aim-assist: gentle magnetism toward a nearby enemy already close to the shot line (trackpad-friendly, still has to aim)
+      if (!dead) {
+        const spd = Math.hypot(b.vx, b.vy) || 1;
+        let best = null, bestAng = 0.20;
+        for (const p of ps) {
+          if (p.id === b.owner || !p.alive) continue;
+          const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy);
+          if (d < 24 || d > 1500) continue;
+          const ang = Math.acos(Math.min(1, Math.max(-1, (b.vx * dx + b.vy * dy) / (spd * d))));
+          if (ang < bestAng && Math.abs((p.h + 50) - b.h) < 150) { bestAng = ang; best = p; }
+        }
+        if (best) {
+          const dx = best.x - b.x, dy = best.y - b.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 2.2 * dt);
+          b.vx += (dx / d * spd - b.vx) * k; b.vy += (dy / d * spd - b.vy) * k;
+        }
+      }
+      // generously sized (~1.25x) player hit radius, trackpad-friendly but not oversized
+      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && Math.hypot(p.x - b.x, p.y - b.y) < 40 + b.r && Math.abs(p.h + 50 - b.h) < 106) {
         if (p.block > 0 && this.front(p, p.x - b.vx, p.y - b.vy)) { // deflect it back toward the shooter
           const o = this.players.get(b.owner), sp = Math.hypot(b.vx, b.vy) * 1.1; let a = Math.atan2(-b.vy, -b.vx); if (o && o.alive) a = Math.atan2(o.y - b.y, o.x - b.x);
           b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.owner = p.id; b.life = 1; b.x += Math.cos(a) * 30; b.y += Math.sin(a) * 30; p.en = Math.max(0, p.en - 8);
@@ -432,13 +449,14 @@ const server = http.createServer(async (req, res) => {
 // ---------- WebSocket ----------
 const wss = new WebSocketServer({ server, maxPayload: 16384 });
 // Keepalive: hosting proxies (e.g. Hugging Face Spaces) close sockets that go quiet; a ping every 25 s keeps lobby sockets open (browsers answer pings automatically).
-setInterval(() => { for (const c of wss.clients) if (c.readyState === 1) { try { c.ping(); } catch {} } }, 25000).unref();
+setInterval(() => { for (const c of wss.clients) if (c.readyState === 1) { try { c.ping(); } catch {} } }, 15000).unref();
 wss.on('connection', (ws) => {
   let room = null, me = null, isHost = false, msgs = 0;
   const rate = setInterval(() => { msgs = 0; }, 1000);
   ws.on('message', (raw) => {
-    if (++msgs > 80) return; // simple flood guard
     let m; try { m = JSON.parse(raw); } catch { return; }
+    if (m.t === 'ping') { try { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'pong' })); } catch {} return; }
+    if (++msgs > 80) return; // simple flood guard
     if (m.t === 'host') {
       if (m.code && rooms.has(m.code) && rooms.get(m.code).key === m.key) room = rooms.get(m.code);
       else { room = new Room(String(m.origin || '').slice(0, 200)); rooms.set(room.code, room); }
@@ -447,12 +465,12 @@ wss.on('connection', (ws) => {
     }
     if (m.t === 'join') {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
-      if (!r) return room === null && ws.send(JSON.stringify({ t: 'error', text: 'No game with that code. Check the code on the big screen!' }));
+      if (!r) return room === null && ws.send(JSON.stringify({ t: 'error', code: 'no_room', text: 'No game with that code. Check the code on the big screen. If it changed, the host may have started a new game.' }));
       room = r; room.lastActive = Date.now();
       let p = [...room.players.values()].find(x => x.token && x.token === m.token);
-      if (p) { p.ws = ws; p.connected = true; }
+      if (p) { p.ws = ws; p.connected = true; if (p.dropAt && Date.now() - p.dropAt < 75e3) { p.alive = true; if (p.savedHp != null) p.hp = p.savedHp; p.respawnAt = 0; } p.dropAt = 0; }
       else {
-        if (room.players.size >= MAX_PLAYERS) return ws.send(JSON.stringify({ t: 'error', text: 'This game is full.' }));
+        if (room.players.size >= MAX_PLAYERS) return ws.send(JSON.stringify({ t: 'error', code: 'full', text: 'This game is full.' }));
         const base = clean(m.name) || 'Explorer'; let name = base; for (let k = 2; [...room.players.values()].some(x => x.name === name); k++) name = base.slice(0, 14 - String(k).length) + k;
         p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws);
       }
@@ -466,7 +484,7 @@ wss.on('connection', (ws) => {
       if (m.t === 'botlevel' && BOT_LEVELS[m.v]) { room.botLevel = m.v; }
       if (m.t === 'bots') { const n = clamp(m.n | 0, 1, 10); for (let i = 0; i < n && room.players.size < MAX_PLAYERS; i++) room.addPlayer(BOT_NAMES[(room.players.size + i) % BOT_NAMES.length] + (room.players.size > 9 ? room.players.size : ''), COLORS[(room.players.size) % COLORS.length], null, true); }
       if (m.t === 'clearbots') { for (const [k, p] of room.players) if (p.bot) room.players.delete(k); room.roster(); }
-      if (m.t === 'kick') { const p = room.players.get(m.id); if (p) { room.send(p.ws, { t: 'error', text: 'You were removed by the host.' }); room.players.delete(m.id); room.roster(); } }
+      if (m.t === 'kick') { const p = room.players.get(m.id); if (p) { room.send(p.ws, { t: 'error', code: 'kicked', text: 'You were removed by the host.' }); room.players.delete(m.id); room.roster(); } }
       if (m.t === 'endnow' && room.phase === 'play') room.end();
       if (m.t === 'lobby') { room.phase = 'lobby'; room.reset(); room.toAll({ t: 'lobby' }); room.roster(); }
       return;

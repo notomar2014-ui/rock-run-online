@@ -103,9 +103,11 @@ body.host #feed{top:330px}body.host #qban{width:min(1150px,66vw);top:auto;bottom
 #tdash{position:absolute;right:22px;bottom:92px;width:76px;height:76px;border-radius:50%;background:radial-gradient(#74c0fc,#1c7ed6);border:3px solid #d0ebff;pointer-events:auto;font-size:14px;color:#fff;display:grid;place-items:center}
 #touch.on~#hud #hotbar,body.touch #hotbar{left:auto;right:10px;transform:none;bottom:184px}body.touch #dashSlot{display:none}
 @media (max-width:760px){#lb{width:150px;font-size:12px}#feed{display:none}.how{grid-template-columns:1fr 1fr}.wl{grid-template-columns:1fr 1fr}#hostLobby .wrap{grid-template-columns:1fr}#me .s{font-size:22px}#hotbar{bottom:10px;gap:5px}.slot{width:54px;height:54px}.slot span{font-size:22px}.slot small{display:none}#qban{top:64px;padding:6px 10px}#qban .q{font-size:15px}#qban .ops{font-size:11px}#fact{bottom:auto;top:250px;font-size:14px}#tip{top:auto;bottom:250px;font-size:14px}#dead{top:34%;font-size:18px;width:90vw}#clock{padding:4px 10px;max-width:118px}#clock .t{font-size:24px}#clock .n{white-space:normal;font-size:10px;line-height:1.2}#me{min-width:0;max-width:105px;padding:6px 10px}#lb{width:120px;font-size:11px}#lb div:nth-child(n+4):not(.you){display:none}#banner{font-size:22px;top:46%}#mm{display:none}#tip{white-space:normal;width:90vw}}
+#reconn{position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:55;display:none;background:rgba(10,8,28,.9);border:1px solid #3d3290;border-radius:999px;padding:8px 18px;font-size:14px;pointer-events:none}#reconn.on{display:block}
 </style></head><body>
 <canvas id="c"></canvas>
 
+<div id="reconn">Reconnecting…</div>
 <div id="hud"><div id="me" class="pnl disp"><div class="r" id="meName"></div><div class="s" id="meScore">0</div><div class="r" id="meRank"></div></div>
 <div id="clock" class="pnl disp"><div class="t" id="clockT">6:00</div><div class="n" id="clockN"></div></div>
 <div id="lb" class="pnl"></div><div id="feed"></div>
@@ -181,19 +183,40 @@ $('#fs').onclick=()=>{document.fullscreenElement?document.exitFullscreen():docum
 // ---------------- network ----------------
 let lastRocks=null,ws=null,cfg=null,myId=0,phase='lobby',roster=new Map(),snap=null,snapAt=0,retry=0,joinedOnce=false,hostInfo=null;
 const sess=IS_HOST?JSON.parse(sessionStorage.rrHost||'null'):JSON.parse(sessionStorage.rrPlayer||'null');
+let wsGen=0,hbTimer=0,lastPong=0,reconnSince=0,resumeFails=0;
+function setReconn(on,text){const el=$('#reconn');if(!el)return;if(text)el.textContent=text;el.classList.toggle('on',!!on)}
+function resumePayload(){if(IS_HOST){const h=JSON.parse(sessionStorage.rrHost||'null');return {t:'host',origin:location.origin,code:h&&h.code,key:h&&h.key}}const p=JSON.parse(sessionStorage.rrPlayer||'null');if(p&&(joinedOnce||myId||p.token))return {t:'join',code:p.code,token:p.token,name:p.name,color:p.color};return null}
+function startHeartbeat(){stopHeartbeat();lastPong=performance.now();hbTimer=setInterval(()=>{if(!ws||ws.readyState!==1)return;send({t:'ping'});if(performance.now()-lastPong>22000){try{ws.close()}catch(e){}}},15000)}
+function stopHeartbeat(){if(hbTimer){clearInterval(hbTimer);hbTimer=0}}
 function connect(){
+ try{if(ws){ws.onclose=ws.onopen=ws.onmessage=ws.onerror=null;if(ws.readyState<2)ws.close()}}catch(e){}
+ const gen=++wsGen;
  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
- ws.onopen=()=>{retry=0;if(IS_HOST){const h=JSON.parse(sessionStorage.rrHost||'null');send({t:'host',origin:location.origin,code:h&&h.code,key:h&&h.key})}else{const p=JSON.parse(sessionStorage.rrPlayer||'null');if(p&&joinedOnce)send({t:'join',code:p.code,token:p.token,name:p.name,color:p.color})}};
- ws.onmessage=e=>onMsg(JSON.parse(e.data));
- ws.onclose=()=>{setTimeout(connect,Math.min(5000,500*2**retry++))};
+ ws.onopen=()=>{if(gen!==wsGen)return;retry=0;lastPong=performance.now();startHeartbeat();const m=resumePayload();if(m)send(m)};
+ ws.onmessage=e=>{if(gen!==wsGen)return;lastPong=performance.now();let msg;try{msg=JSON.parse(e.data)}catch(err){return}onMsg(msg)};
+ ws.onclose=()=>{if(gen!==wsGen)return;stopHeartbeat();const mid=phase==='play'||phase==='end'||joinedOnce||(IS_HOST&&hostInfo);if(mid){if(!reconnSince)reconnSince=performance.now();setReconn(true,'Reconnecting…')}setTimeout(()=>{if(gen===wsGen)connect()},Math.min(4000,400*2**retry++))};
 }
 function send(m){if(ws&&ws.readyState===1)ws.send(JSON.stringify(m))}
+function handleNetError(m){
+ const mid=phase==='play'||phase==='end'||(joinedOnce&&phase!=='lobby');
+ const kicked=m.code==='kicked'||/removed by the host/i.test(m.text||'');
+ if(kicked){$('#err').textContent=m.text||'You were removed by the host.';joinedOnce=false;myId=0;try{sessionStorage.removeItem('rrPlayer')}catch(e){}setReconn(false);show('join');$('#hud').classList.remove('on');phase='lobby';return}
+ if(mid&&(m.code==='no_room'||/No game with that code/i.test(m.text||''))){
+  resumeFails++;setReconn(true,'Reconnecting…');
+  const waited=reconnSince?(performance.now()-reconnSince):0;
+  if(waited>60000&&resumeFails>=4){$('#err').textContent=m.text||'No game with that code. Check the code on the big screen. If it changed, the host may have started a new game.';setReconn(false);show('join');$('#hud').classList.remove('on');phase='lobby'}
+  else setTimeout(()=>{const r=resumePayload();if(r)send(r)},900);
+  return;
+ }
+ $('#err').textContent=m.text||'';
+}
 function onMsg(m){
  switch(m.t){
- case 'error':$('#err').textContent=m.text;if(!IS_HOST&&phase!=='lobby'){show('join');$('#hud').classList.remove('on')}break;
+ case 'pong':break;
+ case 'error':handleNetError(m);break;
  case 'hosted':cfg=m;hostInfo=m;sessionStorage.rrHost=JSON.stringify({code:m.code,key:m.key});const u=location.origin+'/?code='+m.code;
-  $('#bigCode').textContent=m.code;$('#joinUrl').textContent=location.host+'/';$('#qr').src='/qr.svg?u='+encodeURIComponent(u);setPhase(m.phase);break;
- case 'joined':cfg=m;myId=m.id;joinedOnce=true;sessionStorage.rrPlayer=JSON.stringify({code:m.code,token:m.token,name:m.name,color:m.color});$('#waitName').textContent=m.name;$('#meName').textContent=m.name;setPhase(m.phase);break;
+  $('#bigCode').textContent=m.code;$('#joinUrl').textContent=location.host+'/';$('#qr').src='/qr.svg?u='+encodeURIComponent(u);setReconn(false);reconnSince=0;resumeFails=0;setPhase(m.phase);break;
+ case 'joined':cfg=m;myId=m.id;joinedOnce=true;sessionStorage.rrPlayer=JSON.stringify({code:m.code,token:m.token,name:m.name,color:m.color});$('#waitName').textContent=m.name;$('#meName').textContent=m.name;setReconn(false);reconnSince=0;resumeFails=0;setPhase(m.phase);break;
  case 'roster':roster=new Map(m.players.map(p=>[p.id,p]));if(m.phase!==phase&&m.phase!=='end')setPhase(m.phase);renderRoster();break;
  case 'start':tutorialStart();setPhase('play');break;
  case 'lobby':setPhase('lobby');break;
