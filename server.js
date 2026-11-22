@@ -250,6 +250,7 @@ class Room {
       if (!p.bot && !p.connected) { if (p.alive) { p.alive = false; p.slam = 0; } p.respawnAt = this.time; continue; } // gone: hide until they come back
       if (p.bot) this.botThink(p, dt);
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
+      if (!p.bot && Date.now() - (p.inAt || 0) > 600) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 0.6 s (tab hidden, lost keyup, dropped link) = stand still
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
       p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt); // blaster cools ~2x faster if (p.over && p.heat <= 0) p.over = 0;
       if (this.time - p.lastHit > REGEN_DELAY) p.hp = Math.min(HP, p.hp + REGEN * dt);
@@ -401,7 +402,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    if (m.t === 'in') { const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; if (!Number.isFinite(i.a)) i.a = 0; }
+    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; if (!Number.isFinite(i.a)) i.a = 0; }
   });
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });

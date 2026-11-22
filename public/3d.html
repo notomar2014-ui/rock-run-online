@@ -286,7 +286,11 @@ function lockMouse(){if(phase!=='play'||IS_HOST||locked||!canLock())return false
 document.addEventListener('mousedown',e=>{if(e.button!==0||IS_HOST||phase!=='play'||locked)return;if(e.target.closest&&e.target.closest('button,input,select,a,label,#hotbar,#tbtns,.scr.on'))return;if(lockMouse()){e.preventDefault();window.lockClick=performance.now()}},true);
 cv.addEventListener('mousedown',e=>{ac();if(e.button!==0)return;if(performance.now()-(window.lockClick||-1e9)<400)return;if(!locked&&canLock()&&phase==='play'&&!IS_HOST)return;mouse.down=true;mouse.moved=performance.now()});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false});cv.addEventListener('contextmenu',e=>e.preventDefault());
 let joy={id:null,x:0,y:0,dx:0,dy:0},fireTouch=false,myTool=0,dashReq=0,qReq=0,hmT=0,vigT=0;
-function releaseAll(){for(const k in keys)keys[k]=false;mouse.down=false;fireTouch=false;joy.id=null;joy.dx=joy.dy=0}
+// Stuck keys: clear everything we think is held, and tell the server right away (keys are tracked by e.code on both keydown and keyup).
+function releaseAll(){for(const k in keys)keys[k]=false;mouse.down=false;fireTouch=false;joy.id=null;joy.dx=joy.dy=0;rDrag=false;lastSent='';if(phase==='play'&&!IS_HOST)send({t:'in',mx:0,my:0,a:+(myAim||0).toFixed(2),f:0,tool:myTool,d:0,s:0,q:0})}
+document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==cv)releaseAll()});addEventListener('contextmenu',e=>{if(e.target!==cv)releaseAll()}); // right-click on the game = camera drag, elsewhere = a menu may steal the keyups
+document.addEventListener('focusin',e=>{if(e.target&&e.target.tagName==='INPUT')releaseAll()});
+addEventListener('keydown',e=>{if(/^(Meta|OS|Alt)/.test(e.code))releaseAll()},true); // Win/Alt shortcuts often swallow the matching keyup
 addEventListener('blur',releaseAll);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll()});
 addEventListener('orientationchange',()=>setTimeout(()=>{resize();releaseAll()},250));
 addEventListener('keydown',e=>{if(e.code==='KeyQ'&&!e.repeat&&!typing(e))qReq=performance.now()});
