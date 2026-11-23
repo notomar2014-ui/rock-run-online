@@ -47,12 +47,12 @@ function floorAt(x, y) {
 function worldCfg() { return { W, H, plats: PLATS, pillars: PILLARS, occator: OCCATOR }; }
 const Q_TIME = 25, REVEAL_TIME = 4, BREAK_TIME = 15, FIRST_BREAK = FAST ? 5 : 10;
 const PTS_RIGHT = 200, PTS_WRONG = 50, PTS_KO = 100, PTS_DIE = 50, PTS_METEOR = 50; // Omar: +200 right, +100 KO, -50 wrong / meteor / death (never below 0)
-const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.55, DASH_V = 1480, DASH_UP = 640, IFRAME = 0.34;
+const HP = 100, REGEN_DELAY = 4, REGEN = 12, DASH_CD = 2.55, DASH_V = 1850, DASH_UP = 800, IFRAME = 0.34; // dash impulse +25%
 const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.16, speed: 4130, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +30% vs r7c 3180; swept hits; 2 hits = KO
+  { name: 'Blaster', cd: 0.16, speed: 4130, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.24 }, // reload ~20% quicker than 1.55; +30% shot speed vs r7c; 2 hits = KO
   { name: 'Punch', cd: 0.18, reach: 186, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7, slamR: 270 }, // 3-hit KO; reach & slam radius +30% vs r7c; air slam is a 1-hit KO
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];

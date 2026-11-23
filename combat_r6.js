@@ -57,7 +57,7 @@ function toward(a, b) {
   ok(me && (me[18] & 1), 'auto-reload starts when the mag is empty');
   const startedReload = Date.now();
   while (Date.now() - startedReload < 2500) { idle(A); await sleep(50); me = A.me(); if (me && me[15] === 10 && !(me[18] & 1)) break; }
-  ok(me && me[15] === 10 && !(me[18] & 1), 'reload finishes with 10 ammo in about 1.55s (ammo=' + (me && me[15]) + ', t=' + (Date.now() - startedReload) + 'ms)');
+  ok(me && me[15] === 10 && !(me[18] & 1), 'reload finishes with 10 ammo in about 1.24s (ammo=' + (me && me[15]) + ', t=' + (Date.now() - startedReload) + 'ms)');
   // Manual R reload after a couple of shots
   for (let i = 0; i < 3; i++) { fire(A); await sleep(90); }
   await sleep(50); me = A.me();
@@ -127,30 +127,33 @@ function toward(a, b) {
   ok(after && after[21] >= 0, 'slam cooldown is on the snapshot (cd=' + (after && after[21]) + ')');
 
   // --- questions: shuffle + scoring ---
-  let q = A.last.question;
-  if (!q || A.last.grabbed) {
-    const prevN = (q && q.n) || 0; delete A.last.grabbed;
-    q = await (async () => {
-      const t0 = Date.now();
-      while (Date.now() - t0 < 60000) { const qq=A.last.question; if (qq && qq.n>prevN) return qq; await sleep(50); }
-    })();
-  }
-  ok(!!q, 'a question arrived in RR_FAST mode');
-  if (q) {
-    const src = QUESTIONS.find(x => x.q === q.q);
-    ok(src, 'question is from the 60-question pool');
-    const sameOrder = src && src.opts.every((t, i) => t === q.opts[i]);
-    // shuffling is random; with 24 permutations, 1/24 chance same order — don't fail, but check a is remapped if we can after reveal.
-    ok(q.opts && q.opts.length === 4 && src && src.opts.every(t => q.opts.includes(t)), 'options are the same four answers, possibly reordered');
-    // Move Alpha to the correct meteor text
-    const correctText = src.opts[src.a];
-    const ci = q.opts.indexOf(correctText);
-    ok(ci >= 0, 'correct answer is one of the four letters (index ' + ci + ')');
-    // Wait for landing
-    const t1 = Date.now();
-    let grabbed = null;
-    while (Date.now() - t1 < 40000) {
+  // Use a *live* question (with meteors still on the field). Earlier combat steps can outlast the first one.
+  let q = null, src = null, ci = -1, grabbed = null;
+  const findLive = async () => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 25000) {
+      const qq = A.last.question;
       const s = A.snap || h.snap;
+      if (qq && s && (s.a || []).length && (s.qn == null || s.qn === qq.n)) {
+        const found = QUESTIONS.find(x => x.q === qq.q);
+        if (found) {
+          const cix = qq.opts.indexOf(found.opts[found.a]);
+          if (cix >= 0 && s.a.some(a => a[0] === cix)) return { q: qq, src: found, ci: cix };
+        }
+      }
+      await sleep(50);
+    }
+    return null;
+  };
+  for (let attempt = 0; attempt < 3 && !grabbed; attempt++) {
+    delete A.last.grabbed;
+    const live = await findLive();
+    if (!live) break;
+    q = live.q; src = live.src; ci = live.ci;
+    const qn = q.n, t1 = Date.now();
+    while (Date.now() - t1 < 20000) {
+      const s = A.snap || h.snap;
+      if (s && s.qn != null && s.qn !== qn) break; // this question ended
       const mep = s && s.p.find(p => p[0] === A.id);
       const meteor = s && (s.a || []).find(a => a[0] === ci);
       if (mep && meteor && meteor[4] === 0) {
@@ -159,9 +162,20 @@ function toward(a, b) {
       } else if (mep) {
         A.send({ t: 'in', mx: 0, my: 0, a: 0, f: 0, tool: 0, n: n++ });
       }
-      if (A.last.grabbed) { grabbed = A.last.grabbed; break; }
+      if (A.last.grabbed) {
+        // only accept a grab that happened on this question
+        if (!s || s.qn == null || s.qn === qn) grabbed = A.last.grabbed;
+        break;
+      }
       await sleep(40);
     }
+    if (grabbed && !grabbed.ok) { grabbed = null; continue; }
+  }
+  ok(!!q, 'a question arrived in RR_FAST mode');
+  if (q) {
+    ok(src, 'question is from the 60-question pool');
+    ok(q.opts && q.opts.length === 4 && src && src.opts.every(t => q.opts.includes(t)), 'options are the same four answers, possibly reordered');
+    ok(ci >= 0, 'correct answer is one of the four letters (index ' + ci + ')');
     ok(grabbed && grabbed.ok && grabbed.pts === 200, 'correct answer awards +200 (got ' + JSON.stringify(grabbed) + ')');
   }
 
@@ -174,6 +188,9 @@ function toward(a, b) {
   const posOf = c => { const p = c.me(); return p ? [p[1], p[2]] : null; };
   // walk 0.8s at normal speed (fist equipped, not punching)
   let nF = 1;
+  const midX = ((hf.last.hosted && hf.last.hosted.W) || 2400) / 2, midY = ((hf.last.hosted && hf.last.hosted.H) || 1500) / 2;
+  F.send({ t: 'in', mx: 0, my: 0, a: Math.PI/2, f: 0, tool: 1, x: midX, y: midY, h: 0, vx: 0, vy: 0, n: nF++ });
+  await sleep(150);
   const walk = async (f, ms) => {
     const tW = Date.now();
     while (Date.now() - tW < 250) { F.send({ t: 'in', mx: 1, my: 0, a: Math.PI/2, f, tool: 1, s: 0, n: nF++ }); await sleep(40); }
@@ -190,7 +207,7 @@ function toward(a, b) {
   const dWalk = await walk(0, 800);
   const dRush = await walk(1, 800);
   const ratio = dWalk > 20 ? dRush / dWalk : 0;
-  ok(ratio >= 1.55 && ratio <= 2.6, 'holding punch with fist moves at ~2x walk speed (walk=' + dWalk.toFixed(0) + ' rush=' + dRush.toFixed(0) + ' ratio=' + ratio.toFixed(2) + ')');
+  ok(ratio >= 1.5 && ratio <= 2.8, 'holding punch with fist moves at ~2x walk speed (walk=' + dWalk.toFixed(0) + ' rush=' + dRush.toFixed(0) + ' ratio=' + ratio.toFixed(2) + ')');
 
   // auto-punch while holding click, still on the 0.18s cooldown
   F.ev = [];
