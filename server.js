@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r7d';
+const BUILD = 'r7e';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -53,11 +53,11 @@ const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7'
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
   { name: 'Blaster', cd: 0.16, speed: 4130, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.24 }, // reload ~20% quicker than 1.55; +30% shot speed vs r7c; 2 hits = KO
-  { name: 'Punch', cd: 0.18, reach: 186, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7, slamR: 270 }, // 3-hit KO; reach & slam radius +30% vs r7c; air slam is a 1-hit KO
+  { name: 'Punch', cd: 0.18, reach: 225, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7, slamR: 360 }, // 3-hit KO; reach +20% vs r7d (225); slam radius 360 from ground impact
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
-const PLAYER_HIT_R = 46, PLAYER_HIT_H = 122; // player projectile hitbox (~15% bigger than the previous 40 / 106)
+const PLAYER_HIT_R = 56, PLAYER_HIT_H = 135; // player projectile hitbox (bigger again vs r7d 46 / 122)
 const PUNCH_RUSH = SPEED * 2; // hold-punch "secret technique" ground speed
 const ANSWER_SPOTS = [[780, 630], [2415, 540], [4140, 630], [780, 2370], [2415, 2460], [4140, 2370], [2415, 1500], [495, 1500], [4425, 1500]];
 const SPAWN_SAFE = 3;
@@ -232,8 +232,8 @@ class Room {
     if (p.reloading > 0 || p.ammo >= TOOLS[0].mag) return;
     p.reloading = TOOLS[0].reload; p.over = 1; this.ev({ k: 'reload', id: p.id, x: p.x, y: p.y });
   }
-  use(p) {
-    const t = p.tool, T = TOOLS[t]; if (t === 2 || p.cds[t] > 0) return;
+  use(p, opt) {
+    const t = (opt && opt.as != null) ? opt.as : p.tool, T = TOOLS[t]; if (t === 2 || p.cds[t] > 0) return;
     const dx = Math.cos(p.a), dy = Math.sin(p.a);
     if (t === 0) {
       if (p.reloading > 0) return;
@@ -246,14 +246,14 @@ class Room {
     } else if (t === 1) {
       p.inv = 0;
       const flAir = floorAt(p.x, p.y);
-      if ((p.h > flAir + 8 || p.vh > 80) && !p.slam) {
+      if ((!opt || !opt.noSlam) && (p.h > flAir + 8 || p.vh > 80) && !p.slam) {
         if ((p.slamCd || 0) > 0) return; // slam still cooling down
         p.slam = 1; p.vh = -1100; p.cds[1] = 0.8; p.slamCd = T.slamCd; this.ev({ k: 'slamgo', id: p.id }); return;
       }
       p.cds[1] = T.cd; p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
       const c = p.combo; p.swing = 0.16; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
       for (const o of this.players.values()) {
-        if (o === p || !o.alive || dist(o, p) > T.reach + 37 || Math.abs(o.h - p.h) > 150 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
+        if (o === p || !o.alive || dist(o, p) > T.reach + 45 || Math.abs(o.h - p.h) > 200 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
         if (o.block > 0 && this.front(o, p.x, p.y)) { o.en = Math.max(0, o.en - 15); p.kbx -= dx * 420; p.kby -= dy * 420; this.ev({ k: 'blocked', x: o.x, y: o.y }); continue; }
         const kb = 380 + c * 260; this.damage(o, p, T.dmg[c], 'punch', dx * kb, dy * kb, c === 2 ? 430 : 0);
       }
@@ -292,9 +292,9 @@ class Room {
     if (target) {
       const tLead = best / (L.lead ? 900 : 1000);
       inp.a = Math.atan2(target.y + target.vy * tLead - p.y, target.x + target.vx * tLead - p.x) + rnd(-L.aim, L.aim);
-      inp.tool = best < 120 ? 1 : 0; inp.f = Math.random() < (inp.tool ? L.fire * 1.6 : L.fire) ? 1 : 0;
+      inp.tool = best < 150 ? 1 : 0; inp.f = Math.random() < (inp.tool ? L.fire * 1.6 : L.fire) ? 1 : 0;
       if (inp.tool === 0 && p.heat > 75) inp.f = 0; // let the blaster cool down
-      if (inp.tool === 1 && best < 208 && p.h <= 0 && Math.random() < L.slam) { inp.dash = 1; } // hop, then slam on a later think
+      if (inp.tool === 1 && best < 270 && p.h <= 0 && Math.random() < L.slam) { inp.dash = 1; } // hop, then slam on a later think
       if (inp.tool === 1 && p.h > 90 && Math.random() < 0.7) inp.f = 1;
       const inc = this.bullets.find(b => b.owner !== p.id && Math.hypot(b.x - p.x, b.y - p.y) < 220);
       if (inc && p.en > 30 && Math.random() < L.shield) { inp.tool = 2; inp.f = 1; inp.a = Math.atan2(inc.y - p.y, inc.x - p.x); }
@@ -341,7 +341,7 @@ class Room {
       if (!p.bot && !p.connected) { if (p.alive) { p.savedHp = p.hp; p.alive = false; p.slam = 0; } p.dropAt = p.dropAt || Date.now(); p.respawnAt = this.time + 9999; continue; } // hide so they aren't a free target; resume restores them
       if (p.bot) { try { this.botThink(p, dt); } catch (e) { p.botT = 0.2; } }
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
-      if (!p.bot && Date.now() - (p.inAt || 0) > 1000) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 1 s (tab hidden, lost keyup, dropped link) = stand still
+      if (!p.bot && Date.now() - (p.inAt || 0) > 1000) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0, qm: 0, qs: 0 }); // no input for 1 s (tab hidden, lost keyup, dropped link) = stand still
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
       p.heat = Math.max(0, p.heat - (p.over ? 90 : 64) * dt);
       p.slamCd = Math.max(0, (p.slamCd || 0) - dt);
@@ -352,7 +352,16 @@ class Room {
       if (this.time - p.lastHit > REGEN_DELAY) p.hp = Math.min(HP, p.hp + REGEN * dt);
       for (let i = 0; i < 3; i++) p.cds[i] = Math.max(0, p.cds[i] - dt);
       const inp = p.input; p.a = Number.isFinite(+inp.a) ? +inp.a : 0; p.tool = clamp(inp.tool | 0, 0, 2);
-      const shielding = p.tool === 2 && inp.f && p.en > (p.block > 0 ? 0 : TOOLS[2].min);
+      if (inp.qs && !p.qsPrev && p.en > TOOLS[2].min) {
+        p.qShieldFrom = p.tool === 2 ? 0 : p.tool;
+        p.qShieldUntil = this.time + 1;
+      }
+      p.qsPrev = inp.qs ? 1 : 0;
+      if ((p.qShieldUntil || 0) > this.time) {
+        if (p.en <= 0) p.qShieldUntil = 0;
+        else p.tool = 2;
+      }
+      const shielding = p.tool === 2 && (inp.f || (p.qShieldUntil || 0) > this.time) && p.en > (p.block > 0 ? 0 : TOOLS[2].min);
       if (shielding) { if (!p.block) this.ev({ k: 'shield', id: p.id, x: p.x, y: p.y }); p.block = 1; p.en = Math.max(0, p.en - TOOLS[2].drain * dt); p.inv = 0; }
       else { p.block = 0; p.en = Math.min(100, p.en + TOOLS[2].regen * dt); }
       let mx = +inp.mx || 0, my = +inp.my || 0; const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
@@ -381,8 +390,11 @@ class Room {
       p.jPrev = inp.dash ? 1 : 0;
       if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h += p.vh * dt; const fl2 = floorAt(p.x, p.y); if (p.h <= fl2 && p.vh <= 0) { p.h = fl2; p.vh = 0; } if (p.h < 0) { p.h = 0; p.vh = 0; } }
       if (p.slam && p.h <= floorAt(p.x, p.y) + 0.6) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
-        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < ((TOOLS[1].slamR)||270)) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
-      if (inp.f) this.use(p);
+        const ix = p.x, iy = p.y, ih = floorAt(p.x, p.y), slamR = (TOOLS[1].slamR) || 360;
+        for (const o of ps) if (o !== p && o.alive) { const d = Math.hypot(o.x - ix, o.y - iy); if (d < slamR && o.h < ih + slamR) { const nx = (o.x - ix) / (d || 1), ny = (o.y - iy) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
+      if (inp.qm && !p.qmPrev) this.use(p, { as: 1, noSlam: true });
+      else if (inp.f) this.use(p);
+      p.qmPrev = inp.qm ? 1 : 0;
       if (!p.seenWell.c && this.time > 4) { p.seenWell.c = 1; this.fact(p, pick(FACTS.ceres)); }
       p.x = clamp(p.x + (p.vx + p.kbx) * dt, 20, W - 20); p.y = clamp(p.y + (p.vy + p.kby) * dt, 20, H - 20);
       const kd = Math.pow(0.012, dt); p.kbx *= kd; p.kby *= kd;
@@ -414,7 +426,7 @@ class Room {
           const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy);
           if (d < 24 || d > 1500) continue;
           const ang = Math.acos(Math.min(1, Math.max(-1, (b.vx * dx + b.vy * dy) / (spd * d))));
-          if (ang < bestAng && Math.abs((p.h + 50) - b.h) < 172) { bestAng = ang; best = p; }
+          if (ang < bestAng && Math.abs((p.h + 50) - b.h) < 190) { bestAng = ang; best = p; }
         }
         if (best) {
           const dx = best.x - b.x, dy = best.y - b.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 2.2 * dt);
@@ -570,7 +582,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; i.p = Math.max(-1.5, Math.min(1.5, +m.p || 0)); if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0;
+    if (m.t === 'in') { me.inAt = Date.now(); const i = me.input; i.mx = clamp(+m.mx || 0, -1, 1); i.my = clamp(+m.my || 0, -1, 1); i.a = +m.a || 0; i.f = m.f ? 1 : 0; i.tool = clamp(m.tool | 0, 0, 2); i.dash = m.d ? 1 : 0; i.sprint = m.s ? 1 : 0; i.q = m.q ? 1 : 0; i.rl = m.rl ? 1 : 0; i.qm = m.qm ? 1 : 0; i.qs = m.qs ? 1 : 0; i.p = Math.max(-1.5, Math.min(1.5, +m.p || 0)); if (!Number.isFinite(i.a)) i.a = 0; if (m.n != null) me.inSeq = (m.n | 0) >>> 0;
       // Client pose: trusted only if it could be reached with sprint + dash (incl. upward). Used after the physics step so we don't double-move.
       if (Number.isFinite(+m.x) && Number.isFinite(+m.y)) {
         const dtIn = Math.min(0.9, Math.max(0.05, (Date.now() - (me.poseAt || Date.now() - 80)) / 1000));

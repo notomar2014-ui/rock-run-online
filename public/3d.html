@@ -114,12 +114,14 @@ body.host #fact{left:16px;right:auto;top:86px;bottom:auto;width:min(320px,26vw);
 #joy{position:absolute;left:24px;bottom:24px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.18);pointer-events:auto}
 #joy i{position:absolute;left:45px;top:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.35)}
 #tq{position:absolute;right:108px;bottom:70px;width:58px;height:58px;border-radius:50%;background:radial-gradient(#b197fc,#7048e8);border:3px solid #e5dbff;pointer-events:auto;font-size:12px;color:#fff;display:grid;place-items:center}#tdash{position:absolute;right:22px;bottom:92px;width:76px;height:76px;border-radius:50%;background:radial-gradient(#74c0fc,#1c7ed6);border:3px solid #d0ebff;pointer-events:auto;font-size:14px;color:#fff;display:grid;place-items:center}
-#tFire,#tAim,#tReload{position:absolute;border-radius:50%;pointer-events:auto;color:#fff;display:none;place-items:center;line-height:1;text-shadow:0 1px 2px #0008}
-body.touch #tFire,body.touch #tAim,body.touch #tReload{display:grid}
+#tFire,#tAim,#tReload,#tMelee,#tShield{position:absolute;border-radius:50%;pointer-events:auto;color:#fff;display:none;place-items:center;line-height:1;text-shadow:0 1px 2px #0008}
+body.touch #tFire,body.touch #tAim,body.touch #tReload,body.touch #tMelee,body.touch #tShield{display:grid}
 #tFire{right:18px;bottom:186px;width:84px;height:84px;background:radial-gradient(#ff8a3d,#c2255c);border:3px solid #ffd8a8;font-size:13px}
 #tAim{right:112px;bottom:148px;width:58px;height:58px;background:radial-gradient(#66e3ff,#1c7ed6);border:3px solid #d0ebff;font-size:12px}
 #tAim.on{box-shadow:0 0 0 3px #66e3ff88}
 #tReload{right:18px;bottom:284px;width:50px;height:50px;background:radial-gradient(#ffd43b,#f59f00);border:3px solid #fff3bf;font-size:16px;color:#1a1200}
+#tMelee{right:172px;bottom:200px;width:50px;height:50px;background:radial-gradient(#ffa94d,#e8590c);border:3px solid #ffe8cc;font-size:16px}
+#tShield{right:172px;bottom:130px;width:50px;height:50px;background:radial-gradient(#8ce99a,#2f9e44);border:3px solid #d3f9d8;font-size:16px}
 #landHint{display:none;position:fixed;inset:0;z-index:90;background:rgba(7,5,18,.88);color:#fff;align-items:center;justify-content:center;text-align:center;font-size:22px;padding:24px;pointer-events:none;letter-spacing:.3px}
 body.mobile.portrait #landHint{display:flex}
 body.touch #tbtns,body.mobile #tbtns{top:8px;bottom:auto;right:8px}
@@ -174,7 +176,7 @@ body.touch #lb,body.mobile #lb{top:52px}
 <div id="fact" class="pnl"><b>SCIENCE FACT</b><span id="factT"></span></div>
 <div id="banner" class="disp"></div><div id="dead" class="disp"></div><div id="tip" class="pnl"></div>
 <canvas id="mm" width="192" height="120"></canvas></div>
-<div id="touch"><div id="joy"><i></i></div><div id="tReload" class="tbtn disp">R</div><div id="tAim" class="tbtn disp">AIM</div><div id="tFire" class="tbtn disp">FIRE</div><div id="tq" class="disp">DASH</div><div id="tdash" class="disp">JUMP</div></div>
+<div id="touch"><div id="joy"><i></i></div><div id="tReload" class="tbtn disp">R</div><div id="tMelee" class="tbtn disp">F</div><div id="tShield" class="tbtn disp">G</div><div id="tAim" class="tbtn disp">AIM</div><div id="tFire" class="tbtn disp">FIRE</div><div id="tq" class="disp">DASH</div><div id="tdash" class="disp">JUMP</div></div>
 <div id="landHint">Rotate your phone ↻</div>
 <div id="tbtns"><button class="ghost" id="gear" title="Settings (Esc)">⚙</button><button class="ghost" id="mute" title="Mute (M)">🔊</button><button class="ghost" id="fs" title="Full screen">⛶</button><button class="ghost" id="ctrlToggle" title="Desktop or touch controls">Desktop</button></div>
 <div id="scope"><i class="ring"></i><i class="sr"></i></div>
@@ -183,7 +185,7 @@ body.touch #lb,body.mobile #lb{top:52px}
 <label>Look sensitivity <input type="range" class="sens" min="4" max="20" value="10"></label>
 <label>Quality <select id="qualSel" style="width:auto;font-size:15px;padding:6px 10px"><option value="auto">Auto</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select></label>
 <label>Camera <span><button class="ghost small" id="camToggle" type="button">First person</button></span></label>
-<p style="opacity:.75;font-size:13px;margin:8px 0 0;line-height:1.45"><kbd>W A S D</kbd> move · <kbd>Space</kbd> jump · <kbd>Q</kbd> or <kbd>right-click</kbd> dash · <kbd>E</kbd> aim · <kbd>R</kbd> reload · <kbd>1</kbd>–<kbd>3</kbd> tools<br>C also toggles first / third person. Click the game to look around.</p>
+<p style="opacity:.75;font-size:13px;margin:8px 0 0;line-height:1.45"><kbd>W A S D</kbd> move · <kbd>Space</kbd> jump · <kbd>Q</kbd> or <kbd>right-click</kbd> dash · <kbd>E</kbd> aim · <kbd>R</kbd> reload · <kbd>F</kbd> quick punch · <kbd>G</kbd> quick shield · <kbd>1</kbd>–<kbd>3</kbd> tools<br>C also toggles first / third person. Click the game to look around.</p>
 <div class="row"><button id="resumeBtn">Resume</button></div></div></div>
 
 <!-- join -->
@@ -219,7 +221,7 @@ body.touch #lb,body.mobile #lb{top:52px}
 
 <script type="module">import * as THREE from '/vendor/three.module.js';window.THREE=THREE;window.dispatchEvent(new Event('three-ready'));</script>
 <script>
-'use strict';window.RR_BUILD='r7d';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
+'use strict';window.RR_BUILD='r7e';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rnd=(a,b)=>a+Math.random()*(b-a),lerp=(a,b,t)=>a+(b-a)*t;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const IS_HOST=location.pathname.endsWith('/host')||new URLSearchParams(location.search).has('host');
@@ -229,8 +231,8 @@ const WNAME={pebble:'Pebble Blaster',cannon:'Meteor Cannon',laser:'Comet Tail La
 const TOOLI=['🔫','👊','🛡️'],TOOLN=['Blaster','Punch','Shield'],ACOL=['#ff6b6b','#4dabf7','#ffd43b','#69db7c'],ALET=['A','B','C','D'];
 const WCOL={cannon:'#ff8a3d',laser:'#66e3ff',crater:'#ffd43b',gbomb:'#b197fc',shield:'#8ce99a'};
 const HOW_OLD=[['🕹️','Move','<kbd>W A S D</kbd> or arrows<br>Phone: joystick'],['🎯','Aim + shoot','Mouse to aim, <kbd>click</kbd> or <kbd>Space</kbd><br>Phone: FIRE auto-aims'],['❓','Answer','Questions pop up for everyone. <kbd>1</kbd>–<kbd>4</kbd> or tap. Fast + right = big points'],['🏆','Win','One hit = BONK! Most points at the end wins']];
-const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · click the game, then move the mouse to look<br><kbd>Space</kbd> jump (twice!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> or <kbd>right-click</kbd> dash (look up or dash in the air to go up · 2.5s cooldown) · <kbd>C</kbd> third person · <kbd>Esc</kbd> pause / settings'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> or <b>scroll wheel</b> to switch · <kbd>Left click</kbd> to use<br><kbd>R</kbd> reloads the blaster · hold or tap <kbd>E</kbd> to aim down the blaster sights'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one!'],['🏆','Score','Right answer <b>+200</b> · KO someone <b>+100</b><br>Wrong answer, meteor hit, or getting KO\'d <b>−50</b> (never below 0)']];
-const WL=[['🔫','1 · Blaster','2 shots = KO · 10 rounds, then a quick reload (or press R)'],['👊','2 · Punch','3 hits = KO · jump + click = slam, a 1-hit KO (then a cooldown)'],['🛡️','3 · Shield','hold to block from the front · bounces shots back']];
+const HOW=[['🧑‍🚀','Move','<kbd>W A S D</kbd> move · click the game, then move the mouse to look<br><kbd>Space</kbd> jump (twice!) · <kbd>Shift</kbd> sprint · <kbd>Q</kbd> or <kbd>right-click</kbd> dash (look up or dash in the air to go up · 2.5s cooldown) · <kbd>C</kbd> third person · <kbd>Esc</kbd> pause / settings'],['🧰','Tools','<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> or <b>scroll wheel</b> to switch · <kbd>Left click</kbd> to use<br><kbd>R</kbd> reloads the blaster · hold or tap <kbd>E</kbd> to aim down the blaster sights<br><kbd>F</kbd> quick punch (then back to your gun) · <kbd>G</kbd> quick shield for about 1s, then back to your previous tool'],['☄️','Grab the right answer','A question appears at the top and answer meteors crash down. Run into the right one!'],['🏆','Score','Right answer <b>+200</b> · KO someone <b>+100</b><br>Wrong answer, meteor hit, or getting KO\'d <b>−50</b> (never below 0)']];
+const WL=[['🔫','1 · Blaster','2 shots = KO · 10 rounds, then a quick reload (or press R)<br>F = quick punch, then back to the gun · G = quick shield for about 1s'],['👊','2 · Punch','3 hits = KO · jump + click = slam, a 1-hit KO (then a cooldown)'],['🛡️','3 · Shield','hold to block from the front · bounces shots back']];
 const WL_OLD=[['🪨','Pebble Blaster','always on, one hit KO'],['🔥','Meteor Cannon','huge, smashes through rocks'],['💫','Comet Tail Laser','instant beam across the map'],['💥','Vesta Crater Blast','shockwave around you'],['🌀','Gravity Bomb','sucks everyone in, then pops'],['🛡️','Shield','blocks one hit · 💎 crystal = bonus question']];
 function fillHow(){$('#how1').innerHTML=HOW.map(h=>`<div><b>${h[0]}</b><div class="disp">${h[1]}</div>${h[2]}</div>`).join('');$('#wl1').innerHTML=WL.map(w=>`<div><span>${w[0]}</span><div><b>${w[1]}</b><br><small>${w[2]}</small></div></div>`).join('')}
 fillHow();
@@ -380,7 +382,7 @@ function closeQuiz(){}
 let factT=0,bannerT=0;function fact(t,title){if(!t)return;$('#tip').style.display='none';$('#fact b').textContent=title||'SCIENCE FACT';$('#factT').textContent=t;$('#fact').classList.add('on');clearTimeout(factT);factT=setTimeout(()=>{$('#fact').classList.remove('on');$('#fact b').textContent='SCIENCE FACT'},8000)}
 function banner(t){const qon=$('#qban')&&$('#qban').classList.contains('on'),chip=$('#qbStreak'),el=qon&&chip?chip:$('#banner');if(chip&&el!==chip)chip.classList.remove('on');if(el!==$('#banner'))$('#banner').classList.remove('on');el.textContent=t;el.classList.add('on');clearTimeout(bannerT);bannerT=setTimeout(()=>el.classList.remove('on'),2200)}
 function feed(h){const d=document.createElement('div');d.innerHTML=h;$('#feed').prepend(d);while($('#feed').children.length>3)$('#feed').lastChild.remove();setTimeout(()=>{d.style.opacity=0},3200);setTimeout(()=>d.remove(),4000)}
-const TIPS=['🖱️ Click the game to look around. W A S D to move, Space to jump (twice!). C switches to third person.','🧰 1 / 2 / 3 or the scroll wheel picks a tool. Left-click uses it. R reloads the blaster.','☄️ When a question appears, run into the meteor with the right answer! +200 if you\'re right, −50 if you\'re wrong.','👊 Punch three times for a KO. Jump and click for a slam — a one-hit KO, then a cooldown.','💨 Press Q or right-click to dash — it launches you further. Look up, or dash in the air, to go upward. Nothing can hit you while dashing.','🏆 Right answers are +200, a KO is +100. Getting KO\'d or hit by a meteor is −50.'];
+const TIPS=['🖱️ Click the game to look around. W A S D to move, Space to jump (twice!). C switches to third person.','🧰 1 / 2 / 3 or the scroll wheel picks a tool. Left-click uses it. R reloads the blaster. F is a quick punch that switches back to your gun; G raises a short shield, then returns to your previous tool.','☄️ When a question appears, run into the meteor with the right answer! +200 if you\'re right, −50 if you\'re wrong.','👊 Punch three times for a KO. Jump and click for a slam — a one-hit KO, then a cooldown.','💨 Press Q or right-click to dash — it launches you further. Look up, or dash in the air, to go upward. Nothing can hit you while dashing.','🏆 Right answers are +200, a KO is +100. Getting KO\'d or hit by a meteor is −50.'];
 let tipI=-1,tipTimer=0;function tutorialStart(){/* controls live on the waiting screen only */}
 function showTip(){clearTimeout(tipTimer);if(curQ&&curQ.a<0){$('#tip').style.display='none';tipTimer=setTimeout(showTip,1000);return}if(tipI<0||tipI>=TIPS.length){$('#tip').style.display='none';return}$('#tip').style.display='block';$('#tip').textContent=(isTouch?TIPS[tipI].replace('Click the game to lock the mouse. W A S D to move, Space to jump (twice!)','Joystick to move, drag the right side to look, JUMP button').replace('Press 1 / 2 / 3 to pick a tool, left-click to use it','Tap a tool button to use it (auto-aims)'):TIPS[tipI]);tipTimer=setTimeout(()=>{tipI++;showTip()},localStorage.rrTut?2200:3800);if($('#fact').classList.contains('on'))$('#tip').style.display='none'}
 setTimeout(()=>localStorage.rrTut='1',20000);
@@ -437,7 +439,7 @@ function lockMouse(){if(phase!=='play'||IS_HOST||locked||!canLock())return false
 // Document-level (capture) so HUD/overlays over the canvas can't swallow the click; UI buttons/inputs are left alone.
 document.addEventListener('mousedown',e=>{if(e.button!==0||IS_HOST||phase!=='play'||locked)return;if(e.target.closest&&e.target.closest('button,input,select,a,label,#hotbar,#tbtns,#pause,.scr.on'))return;if(lockMouse()){e.preventDefault();window.lockClick=performance.now()}},true);
 cv.addEventListener('mousedown',e=>{ac();if(e.button!==0)return;if(performance.now()-(window.lockClick||-1e9)<400)return;if(!locked&&canLock()&&phase==='play'&&!IS_HOST)return;mouse.down=true;mouse.moved=performance.now()});addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false});cv.addEventListener('contextmenu',e=>e.preventDefault());
-let joy={id:null,x:0,y:0,dx:0,dy:0},fireTouch=false,myTool=0,dashReq=0,qReq=0,hmT=0,vigT=0;
+let joy={id:null,x:0,y:0,dx:0,dy:0},fireTouch=false,myTool=0,dashReq=0,qReq=0,qmReq=0,qsReq=0,qmVis=0,qsVis=0,hmT=0,vigT=0;
 // Stuck keys: clear everything we think is held, and tell the server right away (keys are tracked by e.code on both keydown and keyup).
 function releaseAll(){for(const k in keys)keys[k]=false;mouse.down=false;fireTouch=false;joy.id=null;joy.dx=joy.dy=0;rDrag=false;scopeHeld=0;lastSent='';try{if(lastInp){lastInp.mx=0;lastInp.my=0;lastInp.f=0;lastInp.dash=0;lastInp.sprint=0;lastInp.q=0}}catch(e){}if(phase==='play'&&!IS_HOST)send({t:'in',mx:0,my:0,a:+(myAim||0).toFixed(2),f:0,tool:myTool,d:0,s:0,q:0,rl:0,n:++inSeq})}
 document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==cv)releaseAll()});
@@ -451,10 +453,13 @@ window.addEventListener('orientationchange',()=>setTimeout(()=>{resize();release
 window.addEventListener('keydown',e=>{if(e.repeat||typing(e))return;if(e.code==='KeyQ')qReq=performance.now();if(e.code==='KeyE'){scopeHeld=1;eDownT=performance.now();e.preventDefault()}},{capture:true});
 window.addEventListener('keyup',e=>{if(e.code!=='KeyE')return;scopeHeld=0;if(performance.now()-eDownT<200)scopeToggle=scopeToggle?0:1},{capture:true});
 function selTool(t){myTool=t;$$('#hotbar .slot[data-t]').forEach(e=>e.classList.toggle('sel',+e.dataset.t===t))}
+function visTool(now){now=now||performance.now();if(qsVis&&now<qsVis)return 2;if(qmVis&&now<qmVis)return 1;return myTool}
 $$('#hotbar .slot[data-t]').forEach(e=>{e.addEventListener('mousedown',ev=>{ev.stopPropagation();selTool(+e.dataset.t)});e.addEventListener('touchstart',ev=>{ac();selTool(+e.dataset.t);ev.preventDefault()},{passive:false})});
 addEventListener('keydown',e=>{if(typing(e))return;if(/^Digit[123]$/.test(e.code))selTool(+e.code.slice(5)-1);if(e.code==='Space'&&!e.repeat)dashReq=performance.now();
  if(e.code==='KeyC'&&!e.repeat){firstPerson=!firstPerson;try{localStorage.rrCam=firstPerson?'fp':'tp'}catch(err){};if(typeof camLabel==='function')camLabel()}
- if(e.code==='KeyR')rlReq=performance.now()});
+ if(e.code==='KeyR')rlReq=performance.now();
+ if(e.code==='KeyF'&&!e.repeat){qmReq=performance.now();qmVis=qmReq+200;e.preventDefault()}
+ if(e.code==='KeyG'&&!e.repeat){qsReq=performance.now();qsVis=qsReq+1000;e.preventDefault()}});
 let wheelAcc=0,wheelLock=0;
 addEventListener('wheel',e=>{if(phase!=='play'||IS_HOST)return;e.preventDefault();let d=e.deltaY;if(e.deltaMode===1)d*=16;else if(e.deltaMode===2)d*=400;const now=performance.now();if(now<wheelLock){wheelAcc=0;return}wheelAcc+=d;if(Math.abs(wheelAcc)>=70){selTool((myTool+(wheelAcc>0?1:2))%3);wheelAcc=0;wheelLock=now+150}},{passive:false});
 function touchUI(on){$('#touch').classList.toggle('on',on);document.body.classList.toggle('touch',!!on);if(typeof syncOrient==='function')syncOrient()}
@@ -462,6 +467,8 @@ function bindHold(el,down,up){if(!el||el._bound)return;el._bound=1;const s=e=>{i
 bindHold($('#tFire'),()=>{fireTouch=true},()=>{fireTouch=false});
 bindHold($('#tAim'),()=>{scopeHeld=1;const b=$('#tAim');if(b)b.classList.add('on')},()=>{scopeHeld=0;const b=$('#tAim');if(b)b.classList.remove('on')});
 if($('#tReload'))$('#tReload').addEventListener('touchstart',e=>{ac();rlReq=performance.now();e.preventDefault()},{passive:false});
+if($('#tMelee'))$('#tMelee').addEventListener('touchstart',e=>{ac();qmReq=performance.now();qmVis=qmReq+200;e.preventDefault()},{passive:false});
+if($('#tShield'))$('#tShield').addEventListener('touchstart',e=>{ac();qsReq=performance.now();qsVis=qsReq+1000;e.preventDefault()},{passive:false});
 $('#joy').addEventListener('touchstart',e=>{const t=e.changedTouches[0],r=$('#joy').getBoundingClientRect();joy.id=t.identifier;joy.x=r.left+r.width/2;joy.y=r.top+r.height/2;moveJoy(t);e.preventDefault()},{passive:false});
 addEventListener('touchmove',e=>{for(const t of e.changedTouches)if(t.identifier===joy.id)moveJoy(t)},{passive:false});
 addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===joy.id){joy.id=null;joy.dx=joy.dy=0;$('#joy i').style.transform=''}});
@@ -549,14 +556,14 @@ function gatherInput(now){
  myAim=myFace;
  const d=now-dashReq<200?1:0,sp=keys.ShiftLeft||keys.ShiftRight?1:0;
  if(!Number.isFinite(mx+my+myAim+aimP)){mx=my=0;myAim=0;aimP=0}const q=now-qReq<200?1:0,rl=now-rlReq<200?1:0;
- lastInp={mx,my,a:myAim,f,tool:myTool,dash:d,sprint:sp,q,p:aimP,rl};
+ lastInp={mx,my,a:myAim,f,tool:myTool,dash:d,sprint:sp,q,p:aimP,rl,qm:now-qmReq<200?1:0,qs:now-qsReq<200?1:0};
  if(f&&myTool===0&&me&&!window.paused){const row=snap&&snap.p&&snap.p.find(p=>p[0]===myId);const ammo=row?row[15]:1,reload=row?row[18]&1:0;const due=!firePrev||(now-(window._lastLocalShot||0)>165);if(ammo>0&&!reload&&due){spawnLocalShot(me);window._lastLocalShot=now}}
  firePrev=f;
  return lastInp;
 }
 function sendInput(now){
  if(IS_HOST||phase!=='play'||!snap)return;const inp=lastInp||gatherInput(now);
- const msg={t:'in',mx:+inp.mx.toFixed(2),my:+inp.my.toFixed(2),a:+inp.a.toFixed(2),p:+(+inp.p||0).toFixed(2),f:inp.f,tool:inp.tool,d:inp.dash,s:inp.sprint,q:inp.q,rl:inp.rl||0,n:inSeq+1};
+ const msg={t:'in',mx:+inp.mx.toFixed(2),my:+inp.my.toFixed(2),a:+inp.a.toFixed(2),p:+(+inp.p||0).toFixed(2),f:inp.f,tool:inp.tool,d:inp.dash,s:inp.sprint,q:inp.q,rl:inp.rl||0,qm:inp.qm||0,qs:inp.qs||0,n:inSeq+1};
  if(local){msg.x=+local.x.toFixed(1);msg.y=+local.y.toFixed(1);msg.h=+((local.h||0).toFixed(1));msg.vx=+((local.vx||0).toFixed(1));msg.vy=+((local.vy||0).toFixed(1));msg.vh=+((local.vh||0).toFixed(1))}
  const wire=JSON.stringify(msg);
  if(wire!==lastSent||now-lastSendT>50){inSeq++;msg.n=inSeq;send(msg);lastSent=JSON.stringify(msg);lastSendT=now;predBuf.push({n:inSeq,t:now,inp:lastInp});if(predBuf.length>40)predBuf.shift()}
@@ -847,7 +854,7 @@ function tickVM(dt,now,me){
  const row=snap&&snap.p.find(p=>p[0]===myId);
  const show=firstPerson&&alive&&!(row&&!(row[4]&1));
  VM.g.visible=!!show;if(VM.lite)VM.lite.visible=!!show&&scopeAmt<0.8;if(!show){if(VM.flash)VM.flash.material.opacity=0;return}
- if(myTool!==VM.to){VM.from=VM.to;VM.to=myTool;VM.draw=0}
+ {const vis=visTool();if(vis!==VM.to){VM.from=VM.to;VM.to=vis;VM.draw=0}}
  VM.draw=Math.min(1,VM.draw+dt*3.2);
  const d=VM.draw,ed=d*d*(3-2*d);
  const showTool=ed<.5?VM.from:VM.to;
@@ -984,7 +991,7 @@ function syncWorld(now,dt){
   a.g.position.copy(W3(d.x,d.y,d.h));a.flashT=Math.max(0,(a.flashT||0)-dt);a.g.scale.setScalar(1+a.flashT*.9);if((p[18]&2)&&Math.random()<.6)burst(d.x,d.y,'#d0bfff',1,40,.3,3,50);const ang=(p[0]===myId&&!IS_HOST)?myFace:d.a;a.g.rotation.y=Math.PI/2-ang;a.shadowDisk.position.set(a.g.position.x,.03,a.g.position.z);a.shadowDisk.scale.setScalar(1/(1+d.h*S*.5));
   const spd=Math.hypot(p[6],p[7]),air=d.h>4;a.phase+=dt*14*Math.min(1.3,spd/300);const sw=air?0:Math.min(1.25,spd/300)*.9*Math.sin(a.phase);
   a.legL.rotation.x=air?-.5:sw;a.legR.rotation.x=air?.3:-sw;a.armL.rotation.x=air?-2.4:-sw*.8;
-  const tool=(p[0]===myId&&!IS_HOST)?myTool:p[5];a.gun.visible=tool===0;
+  const tool=(p[0]===myId&&!IS_HOST)?visTool():p[5];a.gun.visible=tool===0;
   a.armR.rotation.x=(p[4]&32)?-1.75:tool===0?-1.5:air?-2.4:sw*.8;if(air&&Math.random()<.5)burst(d.x,d.y,'#ffb04a',1,60,.4,3,d.h+20);
   a.body.position.y=air?0:Math.abs(Math.sin(a.phase))*.04*Math.min(1,spd/300);if(a.wasAir&&!air)a.sq=1;a.wasAir=air;a.sq=Math.max(0,(a.sq||0)-dt*5);a.body.scale.set(.6*(1+a.sq*.12),.6*(1+Math.sin(t*2.2)*.015-a.sq*.2),.6*(1+a.sq*.12));a.body.rotation.x=Math.min(.18,spd/2500);
   const blk=!!(p[4]&2),safe=!!(p[4]&4);a.shield.visible=blk||safe;if(a.shield.visible){a.shield.material.color.set(blk?0x74c0fc:0xffd43b);a.shield.material.opacity=(blk?.18+.1*Math.sin(t*14):.14+.08*Math.sin(t*6))*(p[0]===myId&&!IS_HOST?.45:1)}}
