@@ -52,8 +52,8 @@ const MAX_PLAYERS = 40;
 const COLORS = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
 // exactly 3 tools: 0 ranged blaster, 1 melee punch, 2 blocker shield
 const TOOLS = [
-  { name: 'Blaster', cd: 0.16, speed: 3180, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +41% vs r6d 2260; range ~2700 stays sensible; 2 hits = KO
-  { name: 'Punch', cd: 0.18, reach: 143, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7 }, // 3-hit KO; reach +30%; air slam is a 1-hit KO
+  { name: 'Blaster', cd: 0.16, speed: 4130, life: 0.85, r: 8, dmg: 55, mag: 10, reload: 1.55 }, // +30% vs r7c 3180; swept hits; 2 hits = KO
+  { name: 'Punch', cd: 0.18, reach: 186, arc: 1.5, dmg: [34, 34, 40], combo: 0.9, slamDmg: 120, slamCd: 7, slamR: 270 }, // 3-hit KO; reach & slam radius +30% vs r7c; air slam is a 1-hit KO
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
@@ -66,7 +66,10 @@ const BOT_LEVELS = {
   easy: { think: 0.45, aim: 0.6, fire: 0.13, fight: 0.2, range: 400, selfDefense: 110, humanAvoid: 1.8, smart: 0.3, pick: [7, 14], sprint: 0, shield: 0.15, dash: 0.03, slam: 0 },
   medium: { think: 0.28, aim: 0.32, fire: 0.3, fight: 0.45, range: 550, selfDefense: 140, humanAvoid: 1.25, smart: 0.55, pick: [3.5, 9], sprint: 1, shield: 0.3, dash: 0.12, slam: 0.1 },
   hard: { think: 0.12, aim: 0.2, fire: 0.55, fight: 0.8, range: 650, selfDefense: 200, humanAvoid: 1, smart: 0.65, pick: [1.5, 7], sprint: 1, shield: 0.55, dash: 0.3, slam: 0.25 },
+  // Insane: fast reactions, slight lead, uses dash/up-dash + slam, strafes, grabs answers quickly — strong but still beatable
+  insane: { think: 0.08, aim: 0.09, fire: 0.7, fight: 0.88, range: 800, selfDefense: 260, humanAvoid: 1, smart: 0.8, pick: [0.5, 2.6], sprint: 1, shield: 0.7, dash: 0.46, slam: 0.4, lead: 1, strafe: 1, updash: 1 },
 };
+BOT_LEVELS.normal = BOT_LEVELS.medium;
 const BOT_NAMES = ['Bot Ceres', 'Bot Vesta', 'Bot Pallas', 'Bot Juno', 'Bot Hygiea', 'Bot Psyche', 'Bot Eros', 'Bot Ida', 'Bot Gaspra', 'Bot Lutetia'];
 
 const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -84,6 +87,18 @@ let nid = 1; const id = () => nid++;
 const rooms = new Map();
 function makeCode() { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let c; do { c = ''; for (let i = 0; i < 4; i++) c += A[Math.random() * A.length | 0]; } while (rooms.has(c)); return c; }
 
+// Never let one half-open / reconnecting socket throw and abort a tick, roster, or snapshot fan-out.
+function safeSend(ws, data) {
+  if (!ws || ws.readyState !== 1) return false;
+  try {
+    if (ws.bufferedAmount > 2e6) { try { ws.terminate(); } catch (_) {} return false; }
+    ws.send(typeof data === 'string' ? data : JSON.stringify(data));
+    return true;
+  } catch (e) {
+    try { ws.terminate(); } catch (_) {}
+    return false;
+  }
+}
 class Room {
   constructor(origin) {
     this.code = makeCode(); this.key = crypto.randomBytes(8).toString('hex'); this.origin = origin;
@@ -112,8 +127,8 @@ class Room {
     this.rockDirty = true;
   }
   ev(e) { this.events.push(e); }
-  send(ws, msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
-  toAll(msg) { const s = JSON.stringify(msg); for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) p.ws.send(s); for (const h of this.hosts) if (h.readyState === 1) h.send(s); }
+  send(ws, msg) { safeSend(ws, JSON.stringify(msg)); }
+  toAll(msg) { const s = JSON.stringify(msg); for (const p of this.players.values()) safeSend(p.ws, s); for (const h of this.hosts) safeSend(h, s); }
   fact(p, text) { if (!p.bot) this.send(p.ws, { t: 'fact', text }); }
   addPlayer(name, color, ws, bot = false) {
     const p = { id: id(), token: crypto.randomBytes(8).toString('hex'), name, color, ws, bot, x: 0, y: 0, vx: 0, vy: 0, a: 0,
@@ -249,7 +264,8 @@ class Room {
   botThink(p, dt) {
     const inp = p.input; if (!p.alive) return;
     const L = BOT_LEVELS[this.botLevel] || BOT_LEVELS.easy;
-    p.botT -= dt; if (p.botT > 0) return; p.botT = L.think * rnd(0.8, 1.3);
+    p.botT = Number.isFinite(p.botT) ? p.botT - dt : 0;
+    if (p.botT > 0) return; p.botT = L.think * rnd(0.8, 1.3);
     let target = null, best = 1e9;
     for (const o of this.players.values()) if (o !== p && o.alive && o.inv <= 0) { const d = dist(o, p) * (o.bot ? 1 : L.humanAvoid); if (d < best) { best = d; target = o; } }
     if (this.time > (p.moodUntil || 0)) { p.moodUntil = this.time + rnd(3, 6); p.fighty = Math.random() < L.fight; p.wander = this.freeSpot(); }
@@ -263,19 +279,28 @@ class Room {
     }
     let mx = 0, my = 0;
     if (goal) { mx = goal.x - p.x; my = goal.y - p.y; }
-    else if (target) { mx = target.x - p.x; my = target.y - p.y; if (best < 70) { mx = -my; my = target.x - p.x; } }
+    else if (target) {
+      mx = target.x - p.x; my = target.y - p.y;
+      const orbit = L.strafe ? 240 : 70;
+      if (best < orbit) { mx = -my; my = target.x - p.x; }
+    }
     else if (p.wander) { mx = p.wander.x - p.x; my = p.wander.y - p.y; if (Math.hypot(mx, my) < 60) p.wander = this.freeSpot(); }
     if (!goal) for (const a of q.ans) { const d = dist(a, p); if (d < a.r + 90) { mx += (p.x - a.x) / d * 2; my += (p.y - a.y) / d * 2; } } // don't pick by accident
-    const l = Math.hypot(mx, my) || 1; inp.mx = mx / l; inp.my = my / l; inp.sprint = goal && L.sprint ? 1 : 0; inp.dash = Math.random() < 0.04 ? 1 : 0; inp.q = 0;
+    const l = Math.hypot(mx, my) || 1; inp.mx = mx / l; inp.my = my / l; inp.sprint = goal && L.sprint ? 1 : 0; inp.dash = Math.random() < 0.04 ? 1 : 0; inp.q = 0; inp.p = 0;
     if (target) {
-      inp.a = Math.atan2(target.y + target.vy * best / 1000 - p.y, target.x + target.vx * best / 1000 - p.x) + rnd(-L.aim, L.aim);
+      const tLead = best / (L.lead ? 900 : 1000);
+      inp.a = Math.atan2(target.y + target.vy * tLead - p.y, target.x + target.vx * tLead - p.x) + rnd(-L.aim, L.aim);
       inp.tool = best < 120 ? 1 : 0; inp.f = Math.random() < (inp.tool ? L.fire * 1.6 : L.fire) ? 1 : 0;
       if (inp.tool === 0 && p.heat > 75) inp.f = 0; // let the blaster cool down
-      if (inp.tool === 1 && best < 160 && p.h <= 0 && Math.random() < L.slam) { inp.dash = 1; } // hop, then slam on a later think
+      if (inp.tool === 1 && best < 208 && p.h <= 0 && Math.random() < L.slam) { inp.dash = 1; } // hop, then slam on a later think
       if (inp.tool === 1 && p.h > 90 && Math.random() < 0.7) inp.f = 1;
       const inc = this.bullets.find(b => b.owner !== p.id && Math.hypot(b.x - p.x, b.y - p.y) < 220);
       if (inc && p.en > 30 && Math.random() < L.shield) { inp.tool = 2; inp.f = 1; inp.a = Math.atan2(inc.y - p.y, inc.x - p.x); }
       else if ((inc || best < 90) && p.dashCd <= 0 && Math.random() < L.dash * 3) { inp.q = 1; const s2 = Math.random() < 0.5 ? 1 : -1; inp.mx = -inp.my * s2; inp.my = inp.mx * s2 || 0.5; }
+      else if (L.updash && p.dashCd <= 0) {
+        if (p.h > 40 && Math.random() < 0.35) { inp.q = 1; inp.p = -0.85; }
+        else if (best > 160 && Math.random() < 0.18) { inp.q = 1; inp.p = -0.7; }
+      }
     } else { inp.f = 0; if (Math.hypot(inp.mx, inp.my)) inp.a = Math.atan2(inp.my, inp.mx); }
   }
 
@@ -312,7 +337,7 @@ class Room {
     const ps = [...this.players.values()];
     for (const p of ps) {
       if (!p.bot && !p.connected) { if (p.alive) { p.savedHp = p.hp; p.alive = false; p.slam = 0; } p.dropAt = p.dropAt || Date.now(); p.respawnAt = this.time + 9999; continue; } // hide so they aren't a free target; resume restores them
-      if (p.bot) this.botThink(p, dt);
+      if (p.bot) { try { this.botThink(p, dt); } catch (e) { p.botT = 0.2; } }
       if (!p.alive) { if (this.time >= p.respawnAt) this.respawn(p); continue; }
       if (!p.bot && Date.now() - (p.inAt || 0) > 1000) Object.assign(p.input, { mx: 0, my: 0, f: 0, dash: 0, sprint: 0, q: 0 }); // no input for 1 s (tab hidden, lost keyup, dropped link) = stand still
       p.inv = Math.max(0, p.inv - dt); p.swing = Math.max(0, p.swing - dt); p.dashCd = Math.max(0, p.dashCd - dt); p.iframe = Math.max(0, p.iframe - dt);
@@ -353,7 +378,7 @@ class Room {
       p.jPrev = inp.dash ? 1 : 0;
       if (!grounded || p.vh > 0) { p.vh -= GRAV * dt; p.h += p.vh * dt; const fl2 = floorAt(p.x, p.y); if (p.h <= fl2 && p.vh <= 0) { p.h = fl2; p.vh = 0; } if (p.h < 0) { p.h = 0; p.vh = 0; } }
       if (p.slam && p.h <= floorAt(p.x, p.y) + 0.6) { p.slam = 0; this.ev({ k: 'slam', x: p.x, y: p.y, id: p.id }); // ground slam lands: shockwave
-        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < 208) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
+        for (const o of ps) if (o !== p && o.alive && o.h < 100) { const d = dist(o, p); if (d < ((TOOLS[1].slamR)||270)) { const nx = (o.x - p.x) / (d || 1), ny = (o.y - p.y) / (d || 1); this.damage(o, p, TOOLS[1].slamDmg, 'slam', nx * 700, ny * 700, 420); } } }
       if (inp.f) this.use(p);
       if (!p.seenWell.c && this.time > 4) { p.seenWell.c = 1; this.fact(p, pick(FACTS.ceres)); }
       p.x = clamp(p.x + (p.vx + p.kbx) * dt, 20, W - 20); p.y = clamp(p.y + (p.vy + p.kby) * dt, 20, H - 20);
@@ -420,10 +445,10 @@ class Room {
     if (this.dirtyRoster || this.tickN % TICK === 0) { this.dirtyRoster = false; this.roster(); }
     this.snapshot();
   }
-  snapshot() {
-    if (this.tickN % SNAP_EVERY) return;
+  snapshot(force, onlyWs) {
+    if (!force && this.tickN % SNAP_EVERY) return;
     const R = Math.round, q = this.q, r1 = v => R(v * 10) / 10;
-    const ev = this.events; this.events = [];
+    const ev = this.events; if (!onlyWs) this.events = [];
     const movingRock = this.rocks.some(r => Math.abs(r.vx) + Math.abs(r.vy) > 2);
     const sendRocks = this.rockDirty || movingRock || !this.rockSnap || this.tickN % (SNAP_EVERY * 10) === 0;
     if (sendRocks) { this.rockSnap = this.rocks.map(r => [r.id, R(r.x), R(r.y), R(r.r), r1(r.rot)]); this.rockDirty = false; }
@@ -439,14 +464,21 @@ class Room {
     if (q.ans.length) s.a = q.ans.map(a => [a.i, R(a.x), R(a.y), a.r, r1(Math.max(0, a.landAt - this.time))]);
     if (this.falls.length) s.f = this.falls.map(f => [R(f.x), R(f.y), r1(f.t), f.r, f.big || 0]);
     if (!ev.length) delete s.ev;
-    for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) {
-      s.ack = p.inSeq || 0;
-      s.pr = [R(p.x), R(p.y), R(p.h), R(p.vx), R(p.vy), R(p.vh), p.jumps, R(p.kbx), R(p.kby)];
-      p.ws.send(JSON.stringify(s));
+    const pack = (p) => {
+      s.ack = p ? (p.inSeq || 0) : 0;
+      s.pr = p ? [R(p.x), R(p.y), R(p.h), R(p.vx), R(p.vy), R(p.vh), p.jumps, R(p.kbx), R(p.kby)] : undefined;
+      if (!s.pr) delete s.pr;
+      return JSON.stringify(s);
+    };
+    if (onlyWs) {
+      const me = [...this.players.values()].find(p => p.ws === onlyWs);
+      safeSend(onlyWs, pack(me));
+      return;
     }
+    for (const p of this.players.values()) if (p.ws && p.ws.readyState === 1) safeSend(p.ws, pack(p));
     delete s.ack; delete s.pr;
     const hostS = JSON.stringify(s);
-    for (const h of this.hosts) if (h.readyState === 1) h.send(hostS);
+    for (const h of this.hosts) safeSend(h, hostS);
   }
 }
 function segDist(px, py, x1, y1, x2, y2) { const dx = x2 - x1, dy = y2 - y1, l = dx * dx + dy * dy; let t = l ? ((px - x1) * dx + (py - y1) * dy) / l : 0; t = clamp(t, 0, 1); return Math.hypot(px - x1 - t * dx, py - y1 - t * dy); }
@@ -495,16 +527,16 @@ wss.on('connection', (ws) => {
       if (m.code && rooms.has(m.code) && rooms.get(m.code).key === m.key) room = rooms.get(m.code);
       else { room = new Room(String(m.origin || '').slice(0, 200)); rooms.set(room.code, room); }
       isHost = true; room.hosts.add(ws);
-      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD, world: worldCfg() }); room.roster(); return;
+      room.send(ws, { t: 'hosted', code: room.code, key: room.key, phase: room.phase, W, H, ceres: CERES, vesta: VESTA, build: BUILD, world: worldCfg() }); room.roster(); if (room.phase === 'play' || room.phase === 'end') room.snapshot(true, ws); return;
     }
     if (m.t === 'join') {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
-      if (!r) return room === null && ws.send(JSON.stringify({ t: 'error', code: 'no_room', text: 'No game with that code. Check the code on the big screen. If it changed, the host may have started a new game.' }));
+      if (!r) return room === null && safeSend(ws, JSON.stringify({ t: 'error', code: 'no_room', text: 'No game with that code. Check the code on the big screen. If it changed, the host may have started a new game.' }));
       room = r; room.lastActive = Date.now();
       let p = [...room.players.values()].find(x => x.token && x.token === m.token);
       if (p) { p.ws = ws; p.connected = true; if (!p.dropAt || Date.now() - p.dropAt < 75e3) { if (p.savedHp != null) { p.alive = true; p.hp = p.savedHp; p.respawnAt = 0; } else if (!p.alive) { p.respawnAt = Math.min(p.respawnAt || 0, room.time + 0.15); } } p.dropAt = 0; p.savedHp = null; }
       else {
-        if (room.players.size >= MAX_PLAYERS) return ws.send(JSON.stringify({ t: 'error', code: 'full', text: 'This game is full.' }));
+        if (room.players.size >= MAX_PLAYERS) return safeSend(ws, JSON.stringify({ t: 'error', code: 'full', text: 'This game is full.' }));
         const base = clean(m.name) || 'Explorer'; let name = base; for (let k = 2; [...room.players.values()].some(x => x.name === name); k++) name = base.slice(0, 14 - String(k).length) + k;
         p = room.addPlayer(name, COLORS.includes(m.color) ? m.color : COLORS[room.players.size % COLORS.length], ws);
       }
@@ -519,12 +551,13 @@ wss.on('connection', (ws) => {
           if (pick != null) room.send(ws, { t: 'grabbed', i: pick, ok: pick === ans, pts: 0 });
         }
       }
+      if (room.phase === 'play' || room.phase === 'end') room.snapshot(true, ws);
       room.roster(); return;
     }
     if (!room) return;
     if (isHost && room.hosts.has(ws)) {
       if (m.t === 'start') room.start(m.duration);
-      if (m.t === 'botlevel' && BOT_LEVELS[m.v]) { room.botLevel = m.v; }
+      if (m.t === 'botlevel') { const v = m.v === 'normal' ? 'medium' : m.v; if (BOT_LEVELS[v]) room.botLevel = v; }
       if (m.t === 'bots') { const n = clamp(m.n | 0, 1, 10); for (let i = 0; i < n && room.players.size < MAX_PLAYERS; i++) room.addPlayer(BOT_NAMES[(room.players.size + i) % BOT_NAMES.length] + (room.players.size > 9 ? room.players.size : ''), COLORS[(room.players.size) % COLORS.length], null, true); }
       if (m.t === 'setbots' && room.phase === 'lobby') room.setBots(m.n);
       if (m.t === 'clearbots') { for (const [k, p] of room.players) if (p.bot) room.players.delete(k); room.roster(); }
@@ -546,7 +579,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });
 
-setInterval(() => { for (const r of rooms.values()) r.tick(1 / TICK); }, 1000 / TICK);
+setInterval(() => { for (const r of rooms.values()) { try { r.tick(1 / TICK); } catch (e) { console.error('tick', e); } } }, 1000 / TICK);
 setInterval(() => { // remove abandoned rooms after 30 min of nobody connected
   const now = Date.now();
   for (const [c, r] of rooms) { const live = r.hosts.size || [...r.players.values()].some(p => p.connected && !p.bot); if (live) r.lastActive = now; else if (now - r.lastActive > 30 * 60e3) rooms.delete(c); }

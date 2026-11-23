@@ -86,6 +86,56 @@ const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) &&
   he.send({ t: 'setbots', n: 2 }); delete he.last.end; he.send({ t: 'start', duration: 20 });
   const ended = await he.wait('end', 25000);
   ok(ended && Array.isArray(ended.ranks) && ended.ranks.length >= 2, 'timer ends the game with a scoreboard (ranks=' + (ended && ended.ranks && ended.ranks.length) + ')');
+  // insane / normal difficulty is accepted and does not crash
+  const hd = client(); await hd.open; hd.send({ t: 'host', origin: 'x' }); await hd.wait('hosted');
+  hd.send({ t: 'setbots', n: 2 }); hd.send({ t: 'botlevel', v: 'insane' });
+  delete hd.last.start; hd.send({ t: 'start', duration: 20 });
+  ok(await hd.wait('start') && !srvErr, 'start with insane bot difficulty');
+  const hn = client(); await hn.open; hn.send({ t: 'host', origin: 'x' }); await hn.wait('hosted');
+  hn.send({ t: 'setbots', n: 1 }); hn.send({ t: 'botlevel', v: 'normal' });
+  delete hn.last.start; hn.send({ t: 'start', duration: 20 });
+  ok(await hn.wait('start') && !srvErr, 'normal aliases to medium and starts');
+
+  // bots must keep moving WHILE a peer is mid-reconnect (unclean drop, same IP)
+  const hr = client(); await hr.open; hr.send({ t: 'host', origin: 'x' }); await hr.wait('hosted');
+  const codeR = hr.last.hosted.code;
+  hr.send({ t: 'setbots', n: 3 }); hr.send({ t: 'botlevel', v: 'hard' });
+  const pA = client(); await pA.open; pA.send({ t: 'join', code: codeR, name: 'Alice' }); const jA = await pA.wait('joined');
+  const pB = client(); await pB.open; pB.send({ t: 'join', code: codeR, name: 'Bella' }); await pB.wait('joined');
+  hr.send({ t: 'start', duration: 60 }); await pB.wait('start');
+  const botsOfSnap = s => (s && s.p || []).filter(r => r[0] !== (jA && jA.id)).map(r => [r[0], r[1], r[2]]);
+  const moved = (a, b) => a && b && b.some(p => { const q = a.find(x => x[0] === p[0]); return q && Math.hypot(q[1] - p[1], q[2] - p[2]) > 2; });
+  const tWait = Date.now();
+  while (Date.now() - tWait < 2000 && !(pB.snap && botsOfSnap(pB.snap).length)) await sleep(40);
+  const posA = botsOfSnap(pB.snap);
+  await sleep(500);
+  const posB = botsOfSnap(pB.snap);
+  ok(moved(posA, posB), 'bots move before a disconnect');
+  let lastN = pB.snap && pB.snap.n, snapCount = 0;
+  const posDrop = botsOfSnap(pB.snap);
+  try { pA.ws._socket.destroy(); } catch (e) { try { pA.ws.terminate(); } catch (e2) {} }
+  const tGap = Date.now();
+  while (Date.now() - tGap < 900) {
+    await sleep(40);
+    if (pB.snap && pB.snap.n !== lastN) { snapCount++; lastN = pB.snap.n; }
+  }
+  const posDuring = botsOfSnap(pB.snap);
+  ok(moved(posDrop, posDuring) && snapCount >= 3, 'bots keep moving and other client still gets snaps WHILE a peer reconnects (snaps=' + snapCount + ', moved=' + !!moved(posDrop, posDuring) + ')');
+
+  // session resume: same player + immediate full snapshot; measure token-join to snap
+  const tRe = Date.now();
+  const pA2 = client(); await pA2.open;
+  const tSend = Date.now();
+  pA2.send({ t: 'join', code: codeR, name: 'Alice', token: jA.token });
+  const j2 = await pA2.wait('joined', 4000);
+  const tJoined = Date.now() - tSend;
+  // snapshot may already be in last.s (force-sent on resume)
+  const s2 = pA2.last.s || await pA2.wait('s', 2000);
+  const tSnap = Date.now() - tSend;
+  ok(j2 && j2.id === jA.id, 'session resume restores the same player');
+  ok(s2 && Array.isArray(s2.p) && s2.p.length >= 4, 'resume gets a full state snapshot promptly (join=' + tJoined + 'ms snap=' + tSnap + 'ms players=' + (s2 && s2.p && s2.p.length) + ')');
+  console.log('RECONNECT_MS open=' + (tSend - tRe) + ' join=' + tJoined + ' snap=' + tSnap + ' total=' + (Date.now() - tRe));
+
   ok(!srvErr, 'no server errors' + (srvErr ? ': ' + srvErr.slice(0, 300) : ''));
   console.log(fails ? `EDGE TESTS: ${fails} FAILED` : 'EDGE TESTS: all passed');
   srv.kill(); process.exit(fails ? 1 : 0);
