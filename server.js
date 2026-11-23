@@ -57,6 +57,8 @@ const TOOLS = [
   { name: 'Shield', cd: 0, drain: 30, regen: 18, min: 12 },                                // hold to block from the front, uses energy
 ];
 const SPEED = 300, SPRINT = 450, JUMP_V = 560, GRAV = 900; // low gravity on Ceres: floaty jumps (+ double jump)
+const PLAYER_HIT_R = 46, PLAYER_HIT_H = 122; // player projectile hitbox (~15% bigger than the previous 40 / 106)
+const PUNCH_RUSH = SPEED * 2; // hold-punch "secret technique" ground speed
 const ANSWER_SPOTS = [[780, 630], [2415, 540], [4140, 630], [780, 2370], [2415, 2460], [4140, 2370], [2415, 1500], [495, 1500], [4425, 1500]];
 const SPAWN_SAFE = 3;
 // bot difficulty: think = reaction time (s), aim = aim error (rad), fire = chance to shoot per think, fight = chance to be in a fighting mood,
@@ -251,7 +253,7 @@ class Room {
       p.cds[1] = T.cd; p.combo = this.time - p.comboT < T.combo ? (p.combo + 1) % 3 : 0; p.comboT = this.time;
       const c = p.combo; p.swing = 0.16; p.kbx += dx * (240 + c * 70); p.kby += dy * (240 + c * 70); // lunge
       for (const o of this.players.values()) {
-        if (o === p || !o.alive || dist(o, p) > T.reach + 32 || Math.abs(o.h - p.h) > 130 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
+        if (o === p || !o.alive || dist(o, p) > T.reach + 37 || Math.abs(o.h - p.h) > 150 || Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.a)) > T.arc) continue;
         if (o.block > 0 && this.front(o, p.x, p.y)) { o.en = Math.max(0, o.en - 15); p.kbx -= dx * 420; p.kby -= dy * 420; this.ev({ k: 'blocked', x: o.x, y: o.y }); continue; }
         const kb = 380 + c * 260; this.damage(o, p, T.dmg[c], 'punch', dx * kb, dy * kb, c === 2 ? 430 : 0);
       }
@@ -355,7 +357,8 @@ class Room {
       else { p.block = 0; p.en = Math.min(100, p.en + TOOLS[2].regen * dt); }
       let mx = +inp.mx || 0, my = +inp.my || 0; const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
       // snappy Roblox-style movement: velocity eases to target quickly (little drift)
-      const sp = (inp.sprint && !shielding ? SPRINT : SPEED) * (shielding ? 0.5 : 1), k = Math.min(1, dt * 11);
+      const punchRush = p.tool === 1 && inp.f && !shielding;
+      const sp = (punchRush ? PUNCH_RUSH : (inp.sprint && !shielding ? SPRINT : SPEED)) * (shielding ? 0.5 : 1), k = Math.min(1, dt * 11);
       if (inp.q && !p.qPrev && p.dashCd <= 0) { // dodge dash: further launch, look-up or mid-air goes up (same Q key)
         let ddx = mx, ddy = my; if (!Math.hypot(ddx, ddy)) { ddx = Math.cos(p.a); ddy = Math.sin(p.a); } const dl = Math.hypot(ddx, ddy) || 1;
         ddx /= dl; ddy /= dl;
@@ -389,7 +392,7 @@ class Room {
       // Adopt a recent client pose if it is within generous sprint+dash (incl. upward) bounds of the simulated position. Huge teleports are ignored.
       if (!p.bot && p.clientPose && (Date.now() - p.clientPose.at) < 450) {
         const c = p.clientPose, dd = Math.hypot(c.x - p.x, c.y - p.y), dh = Math.abs((c.h || 0) - p.h);
-        const slack = (SPRINT + DASH_V) * ((c.dtIn || 0.1) + 0.35) + 320;
+        const slack = (Math.max(SPRINT, PUNCH_RUSH) + DASH_V) * ((c.dtIn || 0.1) + 0.35) + 320;
         const vslack = (DASH_UP + JUMP_V) * ((c.dtIn || 0.1) + 0.35) + 240;
         if (dd <= Math.max(550, slack) && dh <= Math.max(400, vslack)) {
           p.x = c.x; p.y = c.y; p.h = c.h;
@@ -411,15 +414,15 @@ class Room {
           const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy);
           if (d < 24 || d > 1500) continue;
           const ang = Math.acos(Math.min(1, Math.max(-1, (b.vx * dx + b.vy * dy) / (spd * d))));
-          if (ang < bestAng && Math.abs((p.h + 50) - b.h) < 150) { bestAng = ang; best = p; }
+          if (ang < bestAng && Math.abs((p.h + 50) - b.h) < 172) { bestAng = ang; best = p; }
         }
         if (best) {
           const dx = best.x - b.x, dy = best.y - b.y, d = Math.hypot(dx, dy) || 1, k = Math.min(1, 2.2 * dt);
           b.vx += (dx / d * spd - b.vx) * k; b.vy += (dy / d * spd - b.vy) * k;
         }
       }
-      // generously sized (~1.25x) player hit radius, trackpad-friendly but not oversized
-      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && closestDist(ox, oy, b.x, b.y, p.x, p.y) < 40 + b.r && Math.abs(p.h + 50 - b.h) < 106) {
+      // generously sized player hit radius (~15% bigger than r7d-early 40 / 106), trackpad-friendly
+      if (!dead) for (const p of ps) if (p.id !== b.owner && p.alive && closestDist(ox, oy, b.x, b.y, p.x, p.y) < PLAYER_HIT_R + b.r && Math.abs(p.h + 50 - b.h) < PLAYER_HIT_H) {
         if (p.block > 0 && this.front(p, p.x - b.vx, p.y - b.vy)) { // deflect it back toward the shooter
           const o = this.players.get(b.owner), sp = Math.hypot(b.vx, b.vy) * 1.1; let a = Math.atan2(-b.vy, -b.vx); if (o && o.alive) a = Math.atan2(o.y - b.y, o.x - b.x);
           b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp; b.owner = p.id; b.life = 1; b.x += Math.cos(a) * 30; b.y += Math.sin(a) * 30; p.en = Math.max(0, p.en - 8);

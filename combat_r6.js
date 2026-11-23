@@ -165,6 +165,45 @@ function toward(a, b) {
     ok(grabbed && grabbed.ok && grabbed.pts === 200, 'correct answer awards +200 (got ' + JSON.stringify(grabbed) + ')');
   }
 
+  // hold-fist: auto-punch on cooldown + 2x ground speed, accepted by the server
+  const hf = client(); await hf.open; hf.send({ t: 'host', origin: 'x' }); await hf.wait('hosted');
+  const codeF = hf.last.hosted.code;
+  const F = client(); await F.open; F.send({ t: 'join', code: codeF, name: 'Fisty' }); const jF = await F.wait('joined'); F.id = jF.id;
+  hf.send({ t: 'start', duration: 60 }); await F.wait('start');
+  await sleep(200);
+  const posOf = c => { const p = c.me(); return p ? [p[1], p[2]] : null; };
+  // walk 0.8s at normal speed (fist equipped, not punching)
+  let nF = 1;
+  const walk = async (f, ms) => {
+    const tW = Date.now();
+    while (Date.now() - tW < 250) { F.send({ t: 'in', mx: 1, my: 0, a: Math.PI/2, f, tool: 1, s: 0, n: nF++ }); await sleep(40); }
+    const t0 = Date.now(), a = posOf(F);
+    while (Date.now() - t0 < ms) {
+      F.send({ t: 'in', mx: 1, my: 0, a: Math.PI/2, f, tool: 1, s: 0, n: nF++ });
+      await sleep(40);
+    }
+    const b = posOf(F);
+    F.send({ t: 'in', mx: 0, my: 0, a: Math.PI/2, f: 0, tool: 1, n: nF++ });
+    await sleep(80);
+    return (a && b) ? Math.hypot(b[0] - a[0], b[1] - a[1]) : 0;
+  };
+  const dWalk = await walk(0, 800);
+  const dRush = await walk(1, 800);
+  const ratio = dWalk > 20 ? dRush / dWalk : 0;
+  ok(ratio >= 1.55 && ratio <= 2.6, 'holding punch with fist moves at ~2x walk speed (walk=' + dWalk.toFixed(0) + ' rush=' + dRush.toFixed(0) + ' ratio=' + ratio.toFixed(2) + ')');
+
+  // auto-punch while holding click, still on the 0.18s cooldown
+  F.ev = [];
+  const tP = Date.now();
+  while (Date.now() - tP < 1000) {
+    F.send({ t: 'in', mx: 0, my: 0, a: 0, f: 1, tool: 1, n: nF++ });
+    await sleep(30);
+  }
+  F.send({ t: 'in', mx: 0, my: 0, a: 0, f: 0, tool: 1, n: nF++ });
+  await sleep(80);
+  const swings = F.ev.filter(e => e.k === 'swing').length;
+  ok(swings >= 4 && swings <= 8, 'holding punch auto-repeats on cooldown (swings=' + swings + ' in 1s, expect ~5)');
+
   ok(!srvErr, 'no server errors' + (srvErr ? ': ' + srvErr.slice(0, 300) : ''));
   console.log(fails ? `COMBAT R6: ${fails} FAILED` : 'COMBAT R6: all passed');
   srv.kill(); process.exit(fails ? 1 : 0);
