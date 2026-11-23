@@ -44,6 +44,7 @@ function floorAt(x, y) {
   }
   return fl;
 }
+const MAX_ROCKS = 40;
 function worldCfg() { return { W, H, plats: PLATS, pillars: PILLARS, occator: OCCATOR }; }
 const Q_TIME = 25, REVEAL_TIME = 4, BREAK_TIME = 15, FIRST_BREAK = FAST ? 5 : 10;
 const PTS_RIGHT = 200, PTS_WRONG = 50, PTS_KO = 100, PTS_DIE = 50, PTS_METEOR = 50; // Omar: +200 right, +100 KO, -50 wrong / meteor / death (never below 0)
@@ -108,11 +109,33 @@ class Room {
     this.lastActive = Date.now(); this.tickN = 0; this.reset();
   }
   reset() {
+    this.clearTimers();
     this.rocks = []; this.bullets = []; this.meteors = []; this.falls = []; this.events = []; this.time = 0;
     this.q = { stage: 'break', until: FIRST_BREAK, qid: -1, n: 0, ans: [], firstRight: false, picks: new Map() };
     this.nextChaos = FAST ? 3 : 30; this.qOrder = shuffle([...QUESTIONS.keys()]); this.qi = 0;
-    this.rockDirty = true; this.rockSnap = null;
+    this.rockDirty = true; this.rockSnap = null; this.swarm = null; this._emptyFor = 0; this.tickMs = 0; this.tickMaxMs = 0;
     for (let i = 0; i < 32; i++) this.spawnRock();
+  }
+  clearTimers() {
+    if (this._timers) for (const id of this._timers) clearTimeout(id);
+    this._timers = [];
+  }
+  later(fn, ms) {
+    const timers = this._timers || (this._timers = []);
+    const id = setTimeout(() => { const i = timers.indexOf(id); if (i >= 0) timers.splice(i, 1); fn(); }, ms);
+    timers.push(id); return id;
+  }
+  pruneStalePlayers() {
+    for (const [id, p] of this.players) if (!p.bot && !p.connected) this.players.delete(id);
+  }
+  stats() {
+    const ps = [...this.players.values()];
+    return { build: BUILD, phase: this.phase, players: ps.length, bots: ps.filter(p => p.bot).length,
+      humans: ps.filter(p => !p.bot).length, disconnected: ps.filter(p => !p.bot && !p.connected).length,
+      rocks: this.rocks.length, bullets: this.bullets.length, meteors: this.meteors.length,
+      falls: this.falls.length, events: this.events.length, swarm: this.swarm ? this.swarm.left : 0,
+      timers: (this._timers || []).length, tickMs: +((this.tickMs || 0).toFixed(2)), tickMaxMs: +((this.tickMaxMs || 0).toFixed(2)),
+      rooms: rooms.size, ticking: [...rooms.values()].filter(r => r.phase === 'play' && (r.hosts.size || [...r.players.values()].some(p => !p.bot && p.connected))).length };
   }
   freeSpot(margin = 160) {
     for (let k = 0; k < 40; k++) {
@@ -127,6 +150,11 @@ class Room {
     const p = x === undefined ? this.freeSpot(80) : { x, y }; r = r || rnd(24, 54);
     this.rocks.push({ id: id(), x: p.x, y: p.y, r, vx: vx ?? 0, vy: vy ?? 0, rot: rnd(0, 6.28), spin: rnd(-1, 1), hp: Math.ceil(r / 22) });
     this.rockDirty = true;
+    while (this.rocks.length > MAX_ROCKS) {
+      let idx = this.rocks.findIndex((rk, i) => i < this.rocks.length - 1 && rk.r < 36);
+      if (idx < 0) idx = 0;
+      this.rocks.splice(idx, 1);
+    }
   }
   ev(e) { this.events.push(e); }
   send(ws, msg) { safeSend(ws, JSON.stringify(msg)); }
@@ -165,12 +193,14 @@ class Room {
     }
   }
   start(duration) {
+    this.pruneStalePlayers();
     this.duration = clamp(duration | 0 || 300, FAST ? 20 : 60, 600); this.reset(); this.phase = 'play';
     for (const p of this.players.values()) { Object.assign(p, { score: 0, kos: 0, deaths: 0, streak: 0, correct: 0, cds: [0, 0, 0], dashCd: 0, ammo: 10, reloading: 0, slamCd: 0 }); this.respawn(p); }
     this.toAll({ t: 'start', duration: this.duration, build: BUILD, world: worldCfg() }); this.roster();
   }
   end() {
     this.phase = 'end';
+    this.bullets = []; this.meteors = []; this.falls = []; this.events = []; this.swarm = null; this.clearTimers();
     const ranks = [...this.players.values()].sort((a, b) => b.score - a.score).map(p => ({ id: p.id, name: p.name, color: p.color, score: p.score, kos: p.kos, correct: p.correct, bot: p.bot }));
     this.toAll({ t: 'end', ranks }); this.roster();
   }
@@ -320,11 +350,18 @@ class Room {
     for (const p of this.players.values()) if (p.alive && p.h < 90 && Math.hypot(p.x - f.x, p.y - f.y) < f.r + 18) this.ko(p, null, f.big ? 'got squashed by a Vesta chunk' : 'got hit by a meteoroid');
     this.ev({ k: 'boom', x: f.x, y: f.y, r: f.r, big: f.big || 0 });
     if (f.big) { for (let i = 0; i < 3; i++) { const a = rnd(0, 6.28); this.spawnRock(f.x + Math.cos(a) * 120, f.y + Math.sin(a) * 120, rnd(24, 36)); }
-      setTimeout(() => this.phase === 'play' && this.toAll({ t: 'chaos', kind: 'meteorite', text: '🌍 Chunks of Vesta reach Earth as METEORITES!', fact: pick(FACTS.meteorite) }), 2500); }
+      this.later(() => this.phase === 'play' && this.toAll({ t: 'chaos', kind: 'meteorite', text: '🌍 Chunks of Vesta reach Earth as METEORITES!', fact: pick(FACTS.meteorite) }), 2500); }
   }
 
   tick(dt) {
     if (this.phase !== 'play') return;
+    const hasPeople = this.hosts.size > 0 || [...this.players.values()].some(p => !p.bot && p.connected);
+    if (!hasPeople) {
+      this._emptyFor = (this._emptyFor || 0) + dt;
+      if (this._emptyFor > 8) this.end();
+      return; // don't keep simulating bots/bullets in abandoned rooms
+    }
+    this._emptyFor = 0;
     this.tickN++; this.time += dt;
     if (this.time >= this.duration) return this.end();
     const q = this.q;
@@ -573,12 +610,13 @@ wss.on('connection', (ws) => {
     if (isHost && room.hosts.has(ws)) {
       if (m.t === 'start') room.start(m.duration);
       if (m.t === 'botlevel') { const v = m.v === 'normal' ? 'medium' : m.v; if (BOT_LEVELS[v]) room.botLevel = v; }
-      if (m.t === 'bots') { const n = clamp(m.n | 0, 1, 10); for (let i = 0; i < n && room.players.size < MAX_PLAYERS; i++) room.addPlayer(BOT_NAMES[(room.players.size + i) % BOT_NAMES.length] + (room.players.size > 9 ? room.players.size : ''), COLORS[(room.players.size) % COLORS.length], null, true); }
+      if (m.t === 'bots') { const have = [...room.players.values()].filter(p => p.bot).length; const n = clamp(m.n | 0, 1, 10); for (let i = 0; i < n && have + i < 10 && room.players.size < MAX_PLAYERS; i++) room.addPlayer(BOT_NAMES[(room.players.size + i) % BOT_NAMES.length] + (room.players.size > 9 ? room.players.size : ''), COLORS[(room.players.size) % COLORS.length], null, true); }
       if (m.t === 'setbots' && room.phase === 'lobby') room.setBots(m.n);
       if (m.t === 'clearbots') { for (const [k, p] of room.players) if (p.bot) room.players.delete(k); room.roster(); }
       if (m.t === 'kick') { const p = room.players.get(m.id); if (p) { room.send(p.ws, { t: 'error', code: 'kicked', text: 'You were removed by the host.' }); room.players.delete(m.id); room.roster(); } }
       if (m.t === 'endnow' && room.phase === 'play') room.end();
-      if (m.t === 'lobby') { room.phase = 'lobby'; room.reset(); room.toAll({ t: 'lobby' }); room.roster(); }
+      if (m.t === 'lobby') { room.pruneStalePlayers(); room.phase = 'lobby'; room.reset(); room.toAll({ t: 'lobby' }); room.roster(); }
+      if (m.t === 'stats') room.send(ws, Object.assign({ t: 'stats' }, room.stats()));
       return;
     }
     if (!me) return;
@@ -594,11 +632,26 @@ wss.on('connection', (ws) => {
   ws.on('close', () => { clearInterval(rate); if (room) { room.hosts.delete(ws); if (me && me.ws === ws) { me.connected = false; me.input = { mx: 0, my: 0, a: me.a, f: 0, tool: 0, dash: 0, sprint: 0, q: 0 }; room.roster(); } } });
 });
 
-setInterval(() => { for (const r of rooms.values()) { try { r.tick(1 / TICK); } catch (e) { console.error('tick', e); } } }, 1000 / TICK);
-setInterval(() => { // remove abandoned rooms after 30 min of nobody connected
+if (!globalThis.__rrTick) {
+  globalThis.__rrTick = setInterval(() => {
+    for (const r of rooms.values()) {
+      try {
+        const t0 = performance.now();
+        r.tick(1 / TICK);
+        const ms = performance.now() - t0;
+        r.tickMs = ms; if (r.phase === 'play') r.tickMaxMs = Math.max(r.tickMaxMs || 0, ms);
+      } catch (e) { console.error('tick', e); }
+    }
+  }, 1000 / TICK);
+}
+setInterval(() => { // drop rooms with no host and no human once they've been empty a short while (bots alone don't keep a room alive)
   const now = Date.now();
-  for (const [c, r] of rooms) { const live = r.hosts.size || [...r.players.values()].some(p => p.connected && !p.bot); if (live) r.lastActive = now; else if (now - r.lastActive > 30 * 60e3) rooms.delete(c); }
-}, 60e3);
+  for (const [c, r] of rooms) {
+    const live = r.hosts.size || [...r.players.values()].some(p => p.connected && !p.bot);
+    if (live) r.lastActive = now;
+    else if (now - r.lastActive > 90e3) rooms.delete(c);
+  }
+}, 15e3);
 // On Vercel the platform owns the socket: export the server (WebSockets via Fluid compute). Everywhere else (local, Docker/HF Spaces on 7860) listen.
 if (process.env.VERCEL) module.exports = server;
 else server.listen(PORT, () => console.log(`Rock Run Online on http://localhost:${PORT}  (host screen: /host)`));
