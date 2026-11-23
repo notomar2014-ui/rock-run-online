@@ -4,7 +4,7 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { QUESTIONS, FACTS, DYK } = require('./questions');
-const BUILD = 'r7c';
+const BUILD = 'r7d';
 
 const PORT = process.env.PORT || 3000;
 const FAST = !!process.env.RR_FAST; // test mode: first question comes sooner, short rounds allowed
@@ -134,8 +134,21 @@ class Room {
     const list = [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, score: p.score, kos: p.kos, deaths: p.deaths, correct: p.correct, bot: p.bot, on: p.connected || p.bot }));
     this.toAll({ t: 'roster', players: list, phase: this.phase, duration: this.duration });
   }
+  setBots(n) {
+    n = clamp(n | 0, 1, 10);
+    const bots = [...this.players.values()].filter(p => p.bot);
+    if (bots.length < n) {
+      const need = n - bots.length;
+      for (let i = 0; i < need && this.players.size < MAX_PLAYERS; i++) {
+        this.addPlayer(BOT_NAMES[(this.players.size + i) % BOT_NAMES.length] + (this.players.size > 9 ? this.players.size : ''), COLORS[this.players.size % COLORS.length], null, true);
+      }
+    } else if (bots.length > n) {
+      for (const p of bots.slice(n)) this.players.delete(p.id);
+      this.roster();
+    }
+  }
   start(duration) {
-    this.duration = clamp(duration | 0 || 360, FAST ? 20 : 120, 900); this.reset(); this.phase = 'play';
+    this.duration = clamp(duration | 0 || 300, FAST ? 20 : 60, 600); this.reset(); this.phase = 'play';
     for (const p of this.players.values()) { Object.assign(p, { score: 0, kos: 0, deaths: 0, streak: 0, correct: 0, cds: [0, 0, 0], dashCd: 0, ammo: 10, reloading: 0, slamCd: 0 }); this.respawn(p); }
     this.toAll({ t: 'start', duration: this.duration, build: BUILD, world: worldCfg() }); this.roster();
   }
@@ -513,6 +526,7 @@ wss.on('connection', (ws) => {
       if (m.t === 'start') room.start(m.duration);
       if (m.t === 'botlevel' && BOT_LEVELS[m.v]) { room.botLevel = m.v; }
       if (m.t === 'bots') { const n = clamp(m.n | 0, 1, 10); for (let i = 0; i < n && room.players.size < MAX_PLAYERS; i++) room.addPlayer(BOT_NAMES[(room.players.size + i) % BOT_NAMES.length] + (room.players.size > 9 ? room.players.size : ''), COLORS[(room.players.size) % COLORS.length], null, true); }
+      if (m.t === 'setbots' && room.phase === 'lobby') room.setBots(m.n);
       if (m.t === 'clearbots') { for (const [k, p] of room.players) if (p.bot) room.players.delete(k); room.roster(); }
       if (m.t === 'kick') { const p = room.players.get(m.id); if (p) { room.send(p.ws, { t: 'error', code: 'kicked', text: 'You were removed by the host.' }); room.players.delete(m.id); room.roster(); } }
       if (m.t === 'endnow' && room.phase === 'play') room.end();

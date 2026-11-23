@@ -62,6 +62,30 @@ const finiteSnap = s => s && s.p.every(p => p.every(v => Number.isFinite(v))) &&
   // end + lobby + restart
   h2.send({ t: 'endnow' }); await sleep(300); h2.send({ t: 'lobby' }); await sleep(200); h2.send({ t: 'clearbots' }); h2.send({ t: 'start', duration: 20 }); await sleep(800);
   ok(h2.snap && finiteSnap(h2.snap) && !srvErr, 'end → lobby → clear bots → start again works');
+  // host sliders: exact bot count 1-10 and auto end when time runs out
+  const hs = client(); await hs.open; hs.send({ t: 'host', origin: 'x' }); await hs.wait('hosted');
+  const botsOf = () => (hs.last.roster && hs.last.roster.players || []).filter(p => p.bot).length;
+  hs.send({ t: 'setbots', n: 1 }); await sleep(150);
+  ok(botsOf() === 1, 'setbots 1 leaves exactly 1 bot (got ' + botsOf() + ')');
+  hs.send({ t: 'setbots', n: 10 }); await sleep(200);
+  ok(botsOf() === 10, 'setbots 10 leaves exactly 10 bots (got ' + botsOf() + ')');
+  hs.send({ t: 'setbots', n: 3 }); await sleep(150);
+  ok(botsOf() === 3, 'changing bots mid-lobby to 3 updates (got ' + botsOf() + ')');
+  hs.send({ t: 'setbots', n: 99 }); await sleep(150);
+  ok(botsOf() === 10, 'setbots clamps to 10 (got ' + botsOf() + ')');
+  hs.send({ t: 'setbots', n: 0 }); await sleep(150);
+  ok(botsOf() === 1, 'setbots clamps 0 up to 1 (got ' + botsOf() + ')');
+  delete hs.last.start; hs.send({ t: 'start', duration: 5 });
+  const stLo = await hs.wait('start');
+  ok(stLo && stLo.duration === 20, 'duration below min clamps to 20s in test mode (got ' + (stLo && stLo.duration) + ')');
+  const ht = client(); await ht.open; ht.send({ t: 'host', origin: 'x' }); await ht.wait('hosted');
+  ht.send({ t: 'setbots', n: 1 }); delete ht.last.start; ht.send({ t: 'start', duration: 9999 });
+  const stHi = await ht.wait('start');
+  ok(stHi && stHi.duration === 600, 'duration above max clamps to 10 min / 600s (got ' + (stHi && stHi.duration) + ')');
+  const he = client(); await he.open; he.send({ t: 'host', origin: 'x' }); await he.wait('hosted');
+  he.send({ t: 'setbots', n: 2 }); delete he.last.end; he.send({ t: 'start', duration: 20 });
+  const ended = await he.wait('end', 25000);
+  ok(ended && Array.isArray(ended.ranks) && ended.ranks.length >= 2, 'timer ends the game with a scoreboard (ranks=' + (ended && ended.ranks && ended.ranks.length) + ')');
   ok(!srvErr, 'no server errors' + (srvErr ? ': ' + srvErr.slice(0, 300) : ''));
   console.log(fails ? `EDGE TESTS: ${fails} FAILED` : 'EDGE TESTS: all passed');
   srv.kill(); process.exit(fails ? 1 : 0);

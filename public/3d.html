@@ -134,7 +134,7 @@ body.host #fact{left:16px;right:auto;top:86px;bottom:auto;width:min(320px,26vw);
 #pause{position:fixed;inset:0;background:rgba(6,4,18,.78);display:none;align-items:center;justify-content:center;z-index:40;pointer-events:auto}
 #pause.on{display:flex}#pause .card{width:min(380px,90vw);text-align:left}
 #pause label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;font-size:15px}
-#pause input[type=range]{width:140px;accent-color:#ffd43b}
+#pause input[type=range]{width:140px;accent-color:#ffd43b}#hostLobby .hostSet{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;margin-top:14px}#hostLobby .hsl{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:800;white-space:nowrap;opacity:.95}#hostLobby .hsl input[type=range]{width:150px;accent-color:#7fe6ff;padding:0;border:0;background:transparent;height:22px}#hostLobby .hsl b{min-width:3.6ch;color:#ffd43b;font-variant-numeric:tabular-nums}
 #pause .row{margin-top:16px;justify-content:flex-end}
 .slot small{display:none!important}
 #hotbar{bottom:12px}
@@ -186,8 +186,11 @@ body.host #fact{left:16px;right:auto;top:86px;bottom:auto;width:min(320px,26vw);
 <div class="scr" id="hostLobby"><div class="logo disp" style="font-size:clamp(36px,6vw,64px)">ROCK RUN</div><div class="tag disp">Join on your laptop or phone</div>
 <div class="wrap card" style="margin-top:12px"><img id="qr" alt="QR code to join"><div style="text-align:left">
 <div style="opacity:.7">Go to</div><div class="url" id="joinUrl"></div><div style="opacity:.7;margin-top:8px">and enter code</div><div class="bigcode disp" id="bigCode">····</div>
-<div class="row" style="justify-content:flex-start"><label style="opacity:.8">Round</label><select id="dur" style="width:auto;font-size:16px;padding:8px"><option value="300">5 min</option><option value="360" selected>6 min</option><option value="480">8 min</option><option value="180">3 min</option></select>
-<button class="ghost small" id="addBots">+3 bots</button><select id="botLvl" title="Bot difficulty" style="width:auto;font-size:15px;padding:7px"><option value="easy" selected>Bots: Easy</option><option value="medium">Bots: Medium</option><option value="hard">Bots: Hard</option></select><button class="ghost small" id="clearBots">Remove bots</button></div></div></div>
+<div class="hostSet">
+<label class="hsl" for="botN">Bots <input type="range" id="botN" min="1" max="10" step="1" value="3" aria-valuemin="1" aria-valuemax="10"><b id="botNv">3</b></label>
+<label class="hsl" for="durMin">Game length <input type="range" id="durMin" min="1" max="10" step="1" value="5" aria-valuemin="1" aria-valuemax="10"><b id="durMinv">5 min</b></label>
+<select id="botLvl" title="Bot difficulty" style="width:auto;font-size:15px;padding:7px"><option value="easy" selected>Bots: Easy</option><option value="medium">Bots: Medium</option><option value="hard">Bots: Hard</option></select>
+</div></div></div>
 <div class="tag disp" style="margin-top:14px" id="pcount">Waiting for players…</div><div class="chips" id="chips"></div>
 <div class="row"><button id="startBtn" style="font-size:24px;padding:16px 46px">Start game ▶</button></div></div>
 
@@ -199,7 +202,7 @@ body.host #fact{left:16px;right:auto;top:86px;bottom:auto;width:min(320px,26vw);
 
 <script type="module">import * as THREE from '/vendor/three.module.js';window.THREE=THREE;window.dispatchEvent(new Event('three-ready'));</script>
 <script>
-'use strict';window.RR_BUILD='r7c';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
+'use strict';window.RR_BUILD='r7d';let firstPerson=true,lookSens=1,scopeAmt=0,scopeOn=0,scopeHeld=0,scopeToggle=0,eDownT=0;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rnd=(a,b)=>a+Math.random()*(b-a),lerp=(a,b,t)=>a+(b-a)*t;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const IS_HOST=location.pathname.endsWith('/host')||new URLSearchParams(location.search).has('host');
@@ -277,11 +280,11 @@ function onMsg(m){
  case 'pong':break;
  case 'error':handleNetError(m);break;
  case 'hosted':cfg=Object.assign({},m,m.world||{});hostInfo=m;sessionStorage.rrHost=JSON.stringify({code:m.code,key:m.key});const u=location.origin+'/?code='+m.code;
-  $('#bigCode').textContent=m.code;$('#joinUrl').textContent=location.host+'/';$('#qr').src='/qr.svg?u='+encodeURIComponent(u);setReconn(false);reconnSince=0;resumeFails=0;setPhase(m.phase);break;
+  $('#bigCode').textContent=m.code;$('#joinUrl').textContent=location.host+'/';$('#qr').src='/qr.svg?u='+encodeURIComponent(u);setReconn(false);reconnSince=0;resumeFails=0;setPhase(m.phase);if(IS_HOST&&m.phase==='lobby'&&window.RR_pushHostBots)window.RR_pushHostBots();break;
  case 'joined':cfg=Object.assign({},m,m.world||{});myId=m.id;joinedOnce=true;sessionStorage.rrPlayer=JSON.stringify({code:m.code,token:m.token,name:m.name,color:m.color});$('#waitName').textContent=m.name;$('#meName').textContent=m.name;setReconn(false);reconnSince=0;resumeFails=0;setPhase(m.phase);break;
  case 'roster':roster=new Map(m.players.map(p=>[p.id,p]));if(m.phase!==phase&&m.phase!=='end')setPhase(m.phase);renderRoster();break;
  case 'start':if(m.world)cfg=Object.assign(cfg||{},m,m.world);tutorialStart();setPhase('play');break;
- case 'lobby':setPhase('lobby');break;
+ case 'lobby':setPhase('lobby');if(IS_HOST&&window.RR_pushHostBots)window.RR_pushHostBots();break;
  case 'world':if(m){cfg=Object.assign(cfg||{},m,m.world||{});}break;
  case 's':if(m.r)lastRocks=m.r;else m.r=lastRocks||[];m.b=m.b||[];m.m=m.m||[];m.a=m.a||[];m.f=m.f||[];m.ev=m.ev||[];snap=m;snapAt=performance.now();onSnapPred(m,snapAt);for(const e of m.ev)onEvent(e);break;
  case 'question':question(m);break;
@@ -319,7 +322,24 @@ $('#nick').value=localStorage.rrNick||'';
 function doJoin(){ac();const code=$('#code').value.trim().toUpperCase(),name=$('#nick').value.trim();if(code.length<4)return $('#err').textContent='Type the 4-letter code from the big screen';if(!name)return $('#err').textContent='Pick a nickname';
  localStorage.rrNick=name;$('#err').textContent='';const old=JSON.parse(sessionStorage.rrPlayer||'null');send({t:'join',code,name,color:myColor,token:old&&old.code===code?old.token:undefined})}
 $('#joinBtn').onclick=doJoin;$('#nick').onkeydown=$('#code').onkeydown=e=>{if(e.key==='Enter')doJoin()};
-if(IS_HOST){show('hostLobby');$('#startBtn').onclick=()=>{ac();send({t:'start',duration:+$('#dur').value})};$('#addBots').onclick=()=>send({t:'bots',n:3});$('#clearBots').onclick=()=>send({t:'clearbots'});$('#botLvl').onchange=e=>send({t:'botlevel',v:e.target.value});const eb=$('#endNowBtn');if(eb)eb.onclick=()=>{if(phase==='play'&&confirm('End the game and show the results?'))send({t:'endnow'})}}
+if(IS_HOST){show('hostLobby');
+ (function hostSettings(){
+  const botEl=$('#botN'),minEl=$('#durMin'),botV=$('#botNv'),minV=$('#durMinv');
+  if(!botEl||!minEl)return;
+  let bots=3,mins=5;
+  try{const b=+localStorage.rrHostBots,m=+localStorage.rrHostMins;if(b>=1&&b<=10)bots=b|0;if(m>=1&&m<=10)mins=m|0}catch(e){}
+  botEl.value=String(bots);minEl.value=String(mins);
+  const paint=()=>{const b=+botEl.value|0,m=+minEl.value|0;botV.textContent=String(b);minV.textContent=m+' min';botEl.setAttribute('aria-valuenow',b);minEl.setAttribute('aria-valuenow',m)};
+  const save=()=>{try{localStorage.rrHostBots=botEl.value;localStorage.rrHostMins=minEl.value}catch(e){}};
+  const pushBots=()=>{paint();save();send({t:'setbots',n:+botEl.value|0})};
+  paint();
+  botEl.addEventListener('input',pushBots);
+  minEl.addEventListener('input',()=>{paint();save()});
+  window.RR_pushHostBots=pushBots;
+ })();
+ $('#startBtn').onclick=()=>{ac();const mins=Math.max(1,Math.min(10,+($('#durMin')&&$('#durMin').value)||5));try{localStorage.rrHostMins=mins}catch(e){}send({t:'start',duration:mins*60})};
+ $('#botLvl').onchange=e=>send({t:'botlevel',v:e.target.value});
+ const eb=$('#endNowBtn');if(eb)eb.onclick=()=>{if(phase==='play'&&confirm('End the game and show the results?'))send({t:'endnow'})}}
 
 // ---------------- answer asteroids ----------------
 let curQ=null,myPick=-1,qresT=0,quizOpen=false;
